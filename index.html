@@ -2061,7 +2061,7 @@ async function generatePDF() {
   // ITEMS TABLE
   doc.autoTable({
     startY: y,
-    head: [['CÓDIGO', 'DESCRIPCIÓN', 'CANT.', 'P. UNITARIO', 'TOTAL NETO']],
+    head: [['CÓDIGO', 'DESCRIPCIÓN', 'CANT.', 'P. UNITARIO', 'TOTAL']],
     body: data.items.map(i => [
       i.code || '—',
       i.desc || '',
@@ -2116,12 +2116,6 @@ async function generatePDF() {
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...C.gray600);
   doc.text('Subtotal', totalsX, endY);
-  doc.setTextColor(...C.navy);
-  doc.text(fmt(subtotal), W - M, endY, { align: 'right' });
-
-  endY += 16;
-  doc.setTextColor(...C.gray600);
-  doc.text('Neto', totalsX, endY);
   doc.setTextColor(...C.navy);
   doc.text(fmt(subtotal), W - M, endY, { align: 'right' });
 
@@ -2182,7 +2176,6 @@ async function generatePDF() {
     `Condición de pago: ${data.terms.payment}`,
     `Validez de la cotización: ${data.terms.validity}`,
     `Plazo de entrega: ${data.terms.delivery}`,
-    `Precios netos no incluyen IVA (19%).`,
     `Material entregado en ${data.terms.location}.`
   ];
   let condY = endY + 34;
