@@ -375,7 +375,9 @@ body {
 }
 .items-table textarea { resize: vertical; min-height: 36px; line-height: 1.45; }
 .items-table .col-code { width: 110px; }
+.items-table .col-parte { width: 110px; }
 .items-table .col-qty { width: 64px; }
+.items-table .col-price { text-align: right; padding-right: 12px; font-weight: 600; color: var(--eq-navy); }
 .items-table .col-cost { width: 110px; }
 .items-table .col-price { width: 110px; }
 .items-table .col-margen { width: 110px; text-align: right; padding-right: 12px; }
@@ -1100,6 +1102,14 @@ body {
             <label class="field-label">Referencia</label>
             <input class="field-input" id="clientReference" placeholder="Ej: 7.5HP 4P WEG" />
           </div>
+          <div class="field">
+            <label class="field-label">Moneda</label>
+            <select class="field-input" id="cotCurrency" onchange="onCurrencyChange(this.value)">
+              <option value="CLP">Peso chileno (CLP $)</option>
+              <option value="USD">Dólar (USD US$)</option>
+              <option value="EUR">Euro (EUR €)</option>
+            </select>
+          </div>
         </div>
       </div>
     </section>
@@ -1127,13 +1137,14 @@ body {
           <table class="items-table">
             <thead>
               <tr>
-                <th class="col-code">Código</th>
+                <th class="col-code">Código (SKU)</th>
+                <th class="col-parte">N° parte</th>
                 <th>Descripción</th>
                 <th class="col-qty" style="text-align: right;">Cant.</th>
                 <th class="col-cost" style="text-align: right;">Costo unit.</th>
+                <th class="col-margen" style="text-align: right;">Margen %</th>
                 <th class="col-price" style="text-align: right;">P. venta</th>
-                <th class="col-margen" style="text-align: right;">Margen</th>
-                <th class="col-total" style="text-align: right;">Total neto</th>
+                <th class="col-total" style="text-align: right;">Total</th>
                 <th class="col-actions"></th>
               </tr>
             </thead>
@@ -1315,14 +1326,47 @@ let state = {
   selectedFamily: '',
   selectedBrand: '',
   onlyPriced: false,
-  search: ''
+  search: '',
+  currency: 'CLP'
+};
+
+const DEFAULT_MARGEN = 30;
+const CURRENCIES = {
+  CLP: { symbol: '$',   locale: 'es-CL' },
+  USD: { symbol: 'US$', locale: 'en-US' },
+  EUR: { symbol: '€',   locale: 'de-DE' },
 };
 
 /* =========================================================================
    UTILITIES
    ========================================================================= */
 const $ = (id) => document.getElementById(id);
-const fmt = (n) => '$ ' + (n || 0).toLocaleString('es-CL');
+// Money formatting: always round UP to the whole currency unit, no decimals.
+function fmt(n) {
+  const cur = CURRENCIES[state.currency] || CURRENCIES.CLP;
+  const v = Math.ceil(Number(n) || 0);
+  return cur.symbol + ' ' + v.toLocaleString(cur.locale);
+}
+// Sale price from cost + margin (margin is over the SALE price → cost / (1 - margin%)).
+// Rounded UP to the whole currency unit (no decimals), per product.
+function calcPrice(it) {
+  const m = (parseFloat(it.margen) || 0) / 100;
+  const c = parseFloat(it.cost) || 0;
+  if (m >= 1 || m < 0) return Math.ceil(c);
+  return Math.ceil(c / (1 - m));
+}
+// Derive a margin % from a stored price+cost (backwards compat with old cotizaciones
+// that saved price but no margin). Returns DEFAULT_MARGEN when it can't be derived.
+function deriveMargen(it) {
+  const c = parseFloat(it.cost) || 0;
+  const p = parseFloat(it.price) || 0;
+  if (p > 0 && c > 0 && p >= c) return Math.round((1 - c / p) * 1000) / 10;
+  return DEFAULT_MARGEN;
+}
+function onCurrencyChange(v) {
+  state.currency = v || 'CLP';
+  renderItems();
+}
 const fmtDate = (d) => {
   const months = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
   return `${d.getDate()} de ${months[d.getMonth()]} de ${d.getFullYear()}`;
@@ -1512,10 +1556,14 @@ async function init() {
    ITEMS
    ========================================================================= */
 function addItem(prefill) {
-  const item = prefill || { id: uid(), code: '', desc: '', qty: 1, cost: 0, price: 0 };
+  const item = prefill || { id: uid(), code: '', numeroParte: '', desc: '', qty: 1, cost: 0, margen: DEFAULT_MARGEN };
   if (!prefill) item.id = uid();
-  // Ensure cost field exists for backwards compat
+  // Backwards compat / normalization
   if (item.cost == null) item.cost = 0;
+  if (item.numeroParte == null) item.numeroParte = '';
+  if (item.margen == null || item.margen === '') item.margen = deriveMargen(item);
+  // Sale price is always derived from cost + margin (no longer editable)
+  item.price = calcPrice(item);
   state.items.push(item);
   renderItems();
 }
@@ -1529,7 +1577,7 @@ function renderItems() {
   const tbody = $('itemsBody');
   tbody.innerHTML = '';
   if (state.items.length === 0) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="8">Sin productos. Agrega desde el catálogo o crea una línea manual.</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="9">Sin productos. Agrega desde el catálogo o crea una línea manual.</td></tr>';
     recalcTotals();
     return;
   }
@@ -1538,12 +1586,13 @@ function renderItems() {
     tr.dataset.id = it.id;
     tr.innerHTML = `
       <td class="col-code"><input class="code-input" data-field="code" value="${escapeAttr(it.code)}" placeholder="—" /></td>
+      <td class="col-parte"><input class="code-input" data-field="numeroParte" value="${escapeAttr(it.numeroParte)}" placeholder="interno" title="N° de parte (interno · no aparece en el PDF del cliente)" /></td>
       <td><textarea data-field="desc" rows="1" placeholder="Descripción del producto">${escapeHtml(it.desc)}</textarea></td>
       <td class="col-qty"><input class="right" data-field="qty" type="number" min="1" value="${it.qty || 1}" /></td>
       <td class="col-cost"><input class="right" data-field="cost" type="number" min="0" step="1" value="${it.cost || 0}" /></td>
-      <td class="col-price"><input class="right" data-field="price" type="number" min="0" step="1" value="${it.price || 0}" /></td>
-      <td class="col-margen" data-field="margen">${renderMargenCell(it)}</td>
-      <td class="col-total" data-field="total">${fmt((it.qty || 0) * (it.price || 0))}</td>
+      <td class="col-margen"><input class="right" data-field="margen" type="number" min="0" max="99" step="0.5" value="${it.margen != null ? it.margen : DEFAULT_MARGEN}" /></td>
+      <td class="col-price right" data-field="price" title="Precio de venta calculado automáticamente (no editable)">${fmt(calcPrice(it))}</td>
+      <td class="col-total" data-field="total">${fmt(calcPrice(it) * (it.qty || 0))}</td>
       <td class="col-actions">
         <button class="btn-icon" onclick="removeItem('${it.id}')" title="Eliminar línea" aria-label="Eliminar">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
@@ -1558,11 +1607,13 @@ function renderItems() {
       if (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA') return;
       el.addEventListener('input', () => {
         const f = el.dataset.field;
-        if (f === 'qty' || f === 'price' || f === 'cost') it[f] = parseFloat(el.value) || 0;
+        if (f === 'qty' || f === 'cost' || f === 'margen') it[f] = parseFloat(el.value) || 0;
         else it[f] = el.value;
-        if (f === 'qty' || f === 'price' || f === 'cost') {
-          tr.querySelector('[data-field="total"]').textContent = fmt((it.qty || 0) * (it.price || 0));
-          tr.querySelector('[data-field="margen"]').innerHTML = renderMargenCell(it);
+        if (f === 'qty' || f === 'cost' || f === 'margen') {
+          it.price = calcPrice(it);
+          tr.querySelector('[data-field="price"]').textContent = fmt(it.price);
+          tr.querySelector('[data-field="total"]').textContent = fmt(it.price * (it.qty || 0));
+          recalcTotals();
         }
         if (f === 'desc') autosize(ta);
       });
@@ -1595,15 +1646,15 @@ function autosize(ta) {
 }
 
 function recalcTotals() {
-  const subtotal = state.items.reduce((s, i) => s + (i.qty || 0) * (i.price || 0), 0);
+  const subtotal = state.items.reduce((s, i) => s + calcPrice(i) * (i.qty || 0), 0);
   const totalCost = state.items.reduce((s, i) => s + (i.qty || 0) * (i.cost || 0), 0);
   const margenTotal = subtotal - totalCost;
   // Only count margen % over items that actually have cost (avoid distortion)
   const subtotalWithCost = state.items.reduce((s, i) => {
-    return s + ((i.cost || 0) > 0 ? (i.qty || 0) * (i.price || 0) : 0);
+    return s + ((i.cost || 0) > 0 ? calcPrice(i) * (i.qty || 0) : 0);
   }, 0);
   const margenPct = subtotalWithCost > 0 ? (margenTotal / subtotalWithCost) * 100 : 0;
-  const iva = Math.round(subtotal * 0.19);
+  const iva = Math.ceil(subtotal * 0.19);
   const total = subtotal + iva;
   $('sumSubtotal').textContent = fmt(subtotal);
   $('sumNeto').textContent = fmt(subtotal);
@@ -1733,11 +1784,13 @@ function addFromCatalog(cod) {
   const p = PRODUCTS.find(x => x.cod === cod);
   if (!p) return;
 
+  // Catalog "precio" is taken as the cost base; sale price is auto from cost + default margin.
+  const mk = () => { const it = { code: p.cod, numeroParte: '', desc: p.desc, qty: 1, cost: p.precio || 0, margen: DEFAULT_MARGEN }; it.price = calcPrice(it); return it; };
   // If the only item is an empty starter row, replace it
-  if (state.items.length === 1 && !state.items[0].code && !state.items[0].desc && !state.items[0].price) {
-    state.items[0] = { id: state.items[0].id, code: p.cod, desc: p.desc, qty: 1, cost: p.precio || 0, price: p.precio || 0 };
+  if (state.items.length === 1 && !state.items[0].code && !state.items[0].desc && !state.items[0].cost) {
+    state.items[0] = { id: state.items[0].id, ...mk() };
   } else {
-    state.items.push({ id: uid(), code: p.cod, desc: p.desc, qty: 1, cost: p.precio || 0, price: p.precio || 0 });
+    state.items.push({ id: uid(), ...mk() });
   }
   renderItems();
   toast(`${p.cod} agregado`);
@@ -1800,8 +1853,8 @@ async function saveCotizacion(opts) {
   }
 
   // Calculate totals to persist (so admin panel can display $ without re-iterating items)
-  const subtotal = state.items.reduce((s, i) => s + (i.qty || 0) * (i.price || 0), 0);
-  const iva = Math.round(subtotal * 0.19);
+  const subtotal = state.items.reduce((s, i) => s + calcPrice(i) * (i.qty || 0), 0);
+  const iva = Math.ceil(subtotal * 0.19);
   const total = subtotal + iva;
 
   const payload = {
@@ -1864,7 +1917,16 @@ async function loadCotizacion(number) {
     $('vendorEmail').value = rec.vendor?.email || '';
     $('vendorPhone').value = rec.vendor?.phone || '';
 
-    state.items = (rec.items || []).map(i => ({ ...i, id: uid() }));
+    state.currency = rec.terms?.currency || 'CLP';
+    if ($('cotCurrency')) $('cotCurrency').value = state.currency;
+
+    state.items = (rec.items || []).map(i => {
+      const it = { ...i, id: uid() };
+      if (it.numeroParte == null) it.numeroParte = '';
+      if (it.margen == null || it.margen === '') it.margen = deriveMargen(it);
+      it.price = calcPrice(it);
+      return it;
+    });
     if (state.items.length === 0) addItem();
     renderItems();
     renderHistory();
@@ -1927,7 +1989,8 @@ function collectData() {
       validity: $('termsValidity').value.trim(),
       delivery: $('termsDelivery').value.trim(),
       location: $('termsLocation').value.trim(),
-      observations: $('termsObservations').value.trim()
+      observations: $('termsObservations').value.trim(),
+      currency: state.currency || 'CLP'
     },
     vendor: {
       name: $('vendorName').value.trim(),
@@ -1936,7 +1999,13 @@ function collectData() {
       phone: $('vendorPhone').value.trim()
     },
     items: state.items.filter(i => i.desc || i.code).map(i => ({
-      code: i.code, desc: i.desc, qty: i.qty || 0, cost: i.cost || 0, price: i.price || 0
+      code: i.code,
+      numeroParte: i.numeroParte || '',
+      desc: i.desc,
+      qty: i.qty || 0,
+      cost: i.cost || 0,
+      margen: i.margen != null ? i.margen : DEFAULT_MARGEN,
+      price: calcPrice(i)
     }))
   };
 }
@@ -2106,7 +2175,7 @@ async function generatePDF() {
 
   // TOTALS
   const subtotal = data.items.reduce((s, i) => s + (i.qty || 0) * (i.price || 0), 0);
-  const iva = Math.round(subtotal * 0.19);
+  const iva = Math.ceil(subtotal * 0.19);
   const total = subtotal + iva;
 
   const totalsX = W - M - 220;
