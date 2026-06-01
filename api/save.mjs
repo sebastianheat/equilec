@@ -3,6 +3,7 @@
 // REQUIRES vendor authentication (Bearer token from /api/auth/login).
 
 import { db, reserveNextNumber, getCurrentUser, json, preflight, withWeb } from "./_lib.mjs";
+import { pushCotizacionToGHL } from "./_ghl.mjs";
 
 export default withWeb(async (req) => {
   if (req.method === "OPTIONS") return preflight();
@@ -77,7 +78,16 @@ export default withWeb(async (req) => {
     `;
   }
 
+  // Integración Heat Suite (GHL): empuja la cotización a CRM solo al CREARLA
+  // (evita oportunidades duplicadas en re-guardados/ediciones). Nunca rompe el guardado.
+  let ghl = null;
+  if (isNew) {
+    ghl = await pushCotizacionToGHL({
+      number, ot, client: body.client, terms, totals, vendor, createdBy,
+    });
+  }
+
   const savedAt = new Date().toISOString();
-  return json({ ok: true, number, savedAt, isNew });
+  return json({ ok: true, number, savedAt, isNew, ghl });
 });
 
