@@ -1,0 +1,2386 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cotizador Equilec · by Heat IA</title>
+<meta name="description" content="Sistema de cotizaciones Equilec — generador de PDF con catálogo de productos." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+/* =========================================================================
+   DESIGN TOKENS — Equilec brand
+   ========================================================================= */
+:root {
+  /* Brand palette extracted from PDF */
+  --eq-blue:        #1E5FA8;
+  --eq-blue-deep:   #134B8E;
+  --eq-blue-soft:   #E7F0FA;
+  --eq-accent:      #3B82F6;
+  --eq-navy:        #0B1F33;
+
+  /* Neutrals */
+  --ink:            #0B1F33;
+  --ink-soft:       #2C3E50;
+  --gray-800:       #1F2937;
+  --gray-700:       #374151;
+  --gray-600:       #5B6770;
+  --gray-500:       #6B7280;
+  --gray-400:       #9CA3AF;
+  --gray-300:       #D1D5DB;
+  --gray-200:       #E5E7EB;
+  --gray-100:       #F3F4F6;
+  --gray-50:        #F9FAFB;
+  --white:          #FFFFFF;
+
+  /* States */
+  --green:          #10B981;
+  --green-soft:     #D1FAE5;
+  --amber:          #F59E0B;
+  --red:            #EF4444;
+  --red-soft:       #FEE2E2;
+
+  /* Layout */
+  --radius-sm:      6px;
+  --radius:         10px;
+  --radius-lg:      14px;
+  --shadow-sm:      0 1px 2px rgba(11, 31, 51, .04), 0 1px 3px rgba(11, 31, 51, .06);
+  --shadow:         0 1px 3px rgba(11, 31, 51, .06), 0 4px 12px rgba(11, 31, 51, .06);
+  --shadow-lg:      0 10px 30px rgba(11, 31, 51, .12), 0 4px 12px rgba(11, 31, 51, .08);
+
+  --sidebar-w:      268px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+*:focus-visible { outline: 2px solid var(--eq-blue); outline-offset: 2px; border-radius: var(--radius-sm); }
+
+html, body { height: 100%; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--gray-50);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* =========================================================================
+   APP SHELL
+   ========================================================================= */
+.app {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  min-height: 100vh;
+}
+.app > * { min-width: 0; }
+
+/* ─── SIDEBAR ─── */
+.sidebar {
+  background: var(--white);
+  border-right: 1px solid var(--gray-200);
+  padding: 22px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--gray-200);
+}
+.brand-mark {
+  width: 36px; height: 36px;
+  background: var(--eq-blue-soft);
+  border-radius: 8px;
+  display: grid; place-items: center;
+}
+.brand-mark svg { width: 22px; height: 22px; color: var(--eq-blue); }
+.brand-text { line-height: 1.1; }
+.brand-name {
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--eq-navy);
+  font-size: 17px;
+}
+.brand-sub {
+  font-size: 10.5px;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 1px;
+}
+
+.btn-new {
+  background: var(--eq-navy);
+  color: var(--white);
+  border: 0;
+  border-radius: var(--radius);
+  padding: 11px 14px;
+  font: inherit;
+  font-weight: 600;
+  font-size: 13.5px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: background .15s;
+}
+.btn-new:hover { background: #06121F; }
+.btn-new svg { width: 16px; height: 16px; }
+
+.sidebar-section { display: flex; flex-direction: column; gap: 8px; }
+.sidebar-title {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 0 4px;
+}
+.history-list { display: flex; flex-direction: column; gap: 4px; }
+.history-empty {
+  font-size: 12px;
+  color: var(--gray-400);
+  padding: 16px 8px;
+  text-align: center;
+  border: 1px dashed var(--gray-200);
+  border-radius: var(--radius);
+}
+.history-item {
+  padding: 9px 11px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background .12s;
+  display: flex; flex-direction: column; gap: 2px;
+  border: 1px solid transparent;
+}
+.history-item:hover { background: var(--gray-50); border-color: var(--gray-200); }
+.history-item.active { background: var(--eq-blue-soft); border-color: var(--eq-blue); }
+.history-cot { font-weight: 600; font-size: 12.5px; color: var(--ink); }
+.history-client { font-size: 11.5px; color: var(--gray-500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-date { font-size: 10.5px; color: var(--gray-400); }
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--gray-200);
+  font-size: 11px;
+  color: var(--gray-500);
+  text-align: center;
+  line-height: 1.5;
+}
+.sidebar-footer strong { color: var(--eq-blue); font-weight: 600; }
+
+/* ─── MAIN AREA ─── */
+.main {
+  padding: 28px 36px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Top bar */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.topbar-left { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.cot-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.cot-number {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--eq-navy);
+  letter-spacing: -0.02em;
+}
+.cot-date { color: var(--gray-600); font-size: 13px; }
+
+.status-badge {
+  background: var(--eq-blue-soft);
+  color: var(--eq-blue);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid #C6DDF2;
+}
+
+.topbar-actions { display: flex; gap: 8px; }
+.btn {
+  border: 0;
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  font: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 7px;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.btn svg { width: 15px; height: 15px; }
+.btn-primary { background: var(--eq-blue); color: var(--white); }
+.btn-primary:hover { background: var(--eq-blue-deep); }
+.btn-secondary { background: var(--white); color: var(--gray-700); border: 1px solid var(--gray-200); }
+.btn-secondary:hover { background: var(--gray-50); border-color: var(--gray-300); }
+.btn-ghost { background: transparent; color: var(--gray-600); }
+.btn-ghost:hover { background: var(--gray-100); color: var(--ink); }
+.btn-danger { background: var(--white); color: var(--red); border: 1px solid var(--red-soft); }
+.btn-danger:hover { background: var(--red-soft); }
+
+/* Cards */
+.card {
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid var(--gray-200);
+}
+.card-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gray-700);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  display: flex; align-items: center; gap: 8px;
+}
+.card-title svg { width: 14px; height: 14px; color: var(--eq-blue); }
+.card-body { padding: 18px 20px; }
+
+/* ─── FORM ─── */
+.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.field-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+.field-input,
+.field-textarea,
+.field-select {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--ink);
+  transition: border-color .12s, box-shadow .12s;
+  min-width: 0;
+}
+.field-input:hover, .field-textarea:hover, .field-select:hover { border-color: var(--gray-300); }
+.field-input:focus, .field-textarea:focus, .field-select:focus {
+  border-color: var(--eq-blue);
+  box-shadow: 0 0 0 3px var(--eq-blue-soft);
+  outline: none;
+}
+.field-textarea { resize: vertical; min-height: 64px; line-height: 1.5; font-family: inherit; }
+
+/* Client grid — fixed layout to prevent overflow */
+.client-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr 1fr;
+  gap: 14px 16px;
+}
+.client-grid .field:nth-child(1) { grid-column: span 2; }
+.client-grid .field:nth-child(2) { grid-column: span 2; }
+.client-grid .field:nth-child(3),
+.client-grid .field:nth-child(4),
+.client-grid .field:nth-child(5),
+.client-grid .field:nth-child(6) { grid-column: span 1; }
+
+/* Items section */
+.items-toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.items-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  background: var(--white);
+}
+.items-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+.items-table thead th {
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--gray-600);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  padding: 11px 12px;
+  background: var(--gray-50);
+  border-bottom: 1px solid var(--gray-200);
+  white-space: nowrap;
+}
+.items-table tbody td {
+  padding: 8px 8px;
+  border-bottom: 1px solid var(--gray-100);
+  vertical-align: top;
+}
+.items-table tbody tr:last-child td { border-bottom: 0; }
+.items-table input, .items-table textarea {
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  transition: border-color .12s, background .12s;
+}
+.items-table input:hover, .items-table textarea:hover {
+  border-color: var(--gray-200);
+  background: var(--gray-50);
+}
+.items-table input:focus, .items-table textarea:focus {
+  border-color: var(--eq-blue);
+  background: var(--white);
+  box-shadow: 0 0 0 2px var(--eq-blue-soft);
+  outline: none;
+}
+.items-table textarea { resize: vertical; min-height: 36px; line-height: 1.45; }
+.items-table .col-code { width: 110px; }
+.items-table .col-qty { width: 64px; }
+.items-table .col-cost { width: 110px; }
+.items-table .col-price { width: 110px; }
+.items-table .col-margen { width: 110px; text-align: right; padding-right: 12px; }
+.items-table .col-total { width: 120px; text-align: right; font-weight: 600; padding-right: 14px; color: var(--eq-navy); }
+.items-table .col-actions { width: 40px; text-align: center; padding: 8px 6px; }
+.items-table input.right { text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; }
+.items-table .code-input { font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
+.margen-cell { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; line-height: 1.3; }
+.margen-cell .m-amt { color: var(--gray-700); }
+.margen-cell .m-pct { font-weight: 600; font-size: 12px; }
+.margen-cell .m-pct.pos { color: #166534; }
+.margen-cell .m-pct.neg { color: #b91c1c; }
+.margen-cell .m-pct.zero { color: var(--gray-500); }
+.margen-cell .m-empty { color: var(--gray-400); font-size: 11px; }
+.items-table tr.empty-row td {
+  padding: 28px;
+  text-align: center;
+  color: var(--gray-400);
+  font-size: 13px;
+}
+.btn-icon {
+  background: transparent;
+  border: 0;
+  width: 28px; height: 28px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: grid; place-items: center;
+  color: var(--gray-400);
+  transition: all .12s;
+}
+.btn-icon:hover { background: var(--red-soft); color: var(--red); }
+.btn-icon svg { width: 14px; height: 14px; }
+
+/* Totals & terms grid */
+.bottom-grid {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 18px;
+  align-items: start;
+}
+
+.terms-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 16px;
+}
+.terms-grid .field-obs { grid-column: 1 / -1; }
+
+/* Totals card */
+.totals { padding: 6px 0; }
+.totals-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 9px 20px;
+  font-size: 13.5px;
+}
+.totals-row .label { color: var(--gray-600); }
+.totals-row .value {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 500;
+  color: var(--ink);
+  font-size: 13.5px;
+}
+.totals-row.subtotal { border-bottom: 1px dashed var(--gray-200); }
+.totals-row.margen { background: var(--gray-50); border-radius: 6px; }
+.totals-row.margen .label { font-weight: 600; color: var(--gray-700); }
+.totals-row.margen .value { display: inline-flex; gap: 8px; align-items: baseline; font-family: 'IBM Plex Mono', monospace; }
+.margen-pct { font-weight: 700; font-size: 12.5px; padding: 2px 8px; border-radius: 999px; background: var(--gray-200); color: var(--gray-700); }
+.margen-pct.pos { background: #dcfce7; color: #166534; }
+.margen-pct.neg { background: #fee2e2; color: #b91c1c; }
+.margen-pct.zero { background: var(--gray-200); color: var(--gray-600); }
+.totals-row.iva .value { color: var(--gray-700); }
+.totals-row.total {
+  background: var(--eq-navy);
+  color: var(--white);
+  padding: 14px 20px;
+  margin-top: 6px;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+.totals-row.total .label {
+  color: var(--white);
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.totals-row.total .value {
+  color: var(--white);
+  font-weight: 700;
+  font-size: 18px;
+}
+
+/* Vendor card */
+.vendor-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+}
+
+/* =========================================================================
+   PRODUCT CATALOG MODAL
+   ========================================================================= */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 31, 51, .55);
+  backdrop-filter: blur(4px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+  animation: fadeIn .15s ease-out;
+}
+.modal-overlay.open { display: flex; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+.modal {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 1080px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-lg);
+  animation: slideUp .2s ease-out;
+}
+.modal-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--gray-200);
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+}
+.modal-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--eq-navy);
+  letter-spacing: -0.01em;
+}
+.modal-subtitle {
+  font-size: 12.5px;
+  color: var(--gray-500);
+  margin-top: 3px;
+}
+.modal-close {
+  background: transparent;
+  border: 0;
+  width: 32px; height: 32px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: grid; place-items: center;
+  color: var(--gray-500);
+  transition: all .12s;
+}
+.modal-close:hover { background: var(--gray-100); color: var(--ink); }
+.modal-close svg { width: 18px; height: 18px; }
+
+.modal-filters {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--gray-200);
+  background: var(--gray-50);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.search-box {
+  position: relative;
+  width: 100%;
+}
+.search-box svg {
+  position: absolute;
+  left: 13px; top: 50%; transform: translateY(-50%);
+  width: 16px; height: 16px;
+  color: var(--gray-400);
+  pointer-events: none;
+}
+.search-input {
+  width: 100%;
+  padding: 11px 14px 11px 38px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  background: var(--white);
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+}
+.search-input:focus {
+  border-color: var(--eq-blue);
+  box-shadow: 0 0 0 3px var(--eq-blue-soft);
+  outline: none;
+}
+
+.filter-chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  align-items: center;
+}
+.chip-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-right: 4px;
+}
+.chip {
+  padding: 6px 11px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--gray-700);
+  transition: all .12s;
+  font-family: inherit;
+}
+.chip:hover { border-color: var(--gray-400); color: var(--ink); }
+.chip.active {
+  background: var(--eq-navy);
+  border-color: var(--eq-navy);
+  color: var(--white);
+}
+.filter-row {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+}
+.filter-select {
+  padding: 7px 12px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.filter-toggle {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12.5px;
+  color: var(--gray-700);
+  cursor: pointer;
+  user-select: none;
+}
+.filter-toggle input { accent-color: var(--eq-blue); cursor: pointer; }
+
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+.product-row {
+  display: grid;
+  grid-template-columns: 130px 1fr 90px 110px 130px 100px;
+  gap: 14px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--gray-100);
+  align-items: center;
+  transition: background .1s;
+}
+.product-row:hover { background: var(--eq-blue-soft); }
+.product-code {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11.5px;
+  color: var(--gray-700);
+  font-weight: 500;
+  background: var(--gray-100);
+  padding: 3px 7px;
+  border-radius: 4px;
+  display: inline-block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.product-desc {
+  font-size: 12.5px;
+  color: var(--ink);
+  line-height: 1.45;
+  min-width: 0;
+}
+.product-brand {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gray-700);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.product-family {
+  font-size: 10.5px;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.product-price {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--eq-navy);
+  text-align: right;
+}
+.product-price.empty {
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--amber);
+  background: #FEF3C7;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: center;
+  display: inline-block;
+}
+.product-stock {
+  font-size: 10.5px;
+  color: var(--gray-500);
+  margin-top: 2px;
+  text-align: right;
+}
+.product-stock.in { color: var(--green); }
+.btn-add {
+  background: var(--eq-blue);
+  color: var(--white);
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  font: inherit;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background .12s;
+  white-space: nowrap;
+}
+.btn-add:hover { background: var(--eq-blue-deep); }
+
+.empty-results {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--gray-500);
+  font-size: 14px;
+}
+
+.modal-footer {
+  padding: 12px 24px;
+  border-top: 1px solid var(--gray-200);
+  background: var(--gray-50);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12.5px;
+  color: var(--gray-600);
+}
+.modal-footer .count strong { color: var(--ink); font-weight: 700; }
+
+/* =========================================================================
+   TOAST
+   ========================================================================= */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--eq-navy);
+  color: var(--white);
+  padding: 12px 18px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: var(--shadow-lg);
+  z-index: 200;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all .2s;
+  pointer-events: none;
+  display: flex; align-items: center; gap: 8px;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast svg { width: 16px; height: 16px; color: var(--green); }
+
+/* =========================================================================
+   RESPONSIVE
+   ========================================================================= */
+@media (max-width: 1100px) {
+  .bottom-grid { grid-template-columns: 1fr; }
+  .client-grid { grid-template-columns: 1fr 1fr; }
+  .client-grid .field:nth-child(1) { grid-column: span 2; }
+  .client-grid .field:nth-child(2) { grid-column: span 2; }
+  .client-grid .field:nth-child(3),
+  .client-grid .field:nth-child(4),
+  .client-grid .field:nth-child(5),
+  .client-grid .field:nth-child(6) { grid-column: span 1; }
+}
+@media (max-width: 900px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar { position: relative; height: auto; border-right: 0; border-bottom: 1px solid var(--gray-200); }
+  .main { padding: 20px 18px 60px; }
+  .product-row {
+    grid-template-columns: 1fr 100px;
+    grid-template-areas:
+      "code add"
+      "desc add"
+      "meta add"
+      "price add";
+    gap: 6px 12px;
+  }
+  .product-row .product-code { grid-area: code; justify-self: start; }
+  .product-row .product-desc { grid-area: desc; }
+  .product-row .product-meta { grid-area: meta; display: flex; gap: 10px; align-items: center; }
+  .product-row .product-price-wrap { grid-area: price; }
+  .product-row .btn-add { grid-area: add; align-self: center; }
+  .terms-grid { grid-template-columns: 1fr; }
+  .vendor-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .client-grid { grid-template-columns: 1fr; }
+  .client-grid .field:nth-child(n) { grid-column: span 1; }
+  .topbar { flex-direction: column; align-items: stretch; gap: 12px; }
+  .topbar-actions { justify-content: stretch; }
+  .topbar-actions .btn { flex: 1; justify-content: center; }
+  .main { padding: 16px 14px 50px; }
+}
+
+/* Print: hide everything except for one moment when generating PDF preview if needed */
+@media print {
+  .sidebar, .topbar-actions, .items-toolbar, .btn-icon { display: none; }
+}
+
+/* =========================================================================
+   LOGIN SCREEN
+   ========================================================================= */
+.login-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: linear-gradient(135deg, var(--gray-50) 0%, var(--eq-blue-soft) 100%);
+}
+.login-shell.hidden { display: none; }
+.login-card {
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: 18px;
+  box-shadow: var(--shadow-lg);
+  padding: 36px 32px;
+  max-width: 400px;
+  width: 100%;
+}
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  justify-content: center;
+}
+.login-mark {
+  width: 38px; height: 38px;
+  background: var(--eq-blue-soft);
+  border-radius: 9px;
+  display: grid; place-items: center;
+}
+.login-mark svg { width: 24px; height: 24px; color: var(--eq-blue); }
+.login-name {
+  font-weight: 800;
+  font-size: 19px;
+  letter-spacing: -0.01em;
+  color: var(--eq-navy);
+}
+.login-title {
+  text-align: center;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--eq-navy);
+  margin-bottom: 4px;
+}
+.login-sub {
+  text-align: center;
+  font-size: 12px;
+  color: var(--gray-500);
+  margin-bottom: 22px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+}
+.login-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  margin-bottom: 12px;
+}
+.login-input:focus { border-color: var(--eq-blue); box-shadow: 0 0 0 3px var(--eq-blue-soft); outline: none; }
+.login-btn-primary {
+  width: 100%;
+  background: var(--eq-navy);
+  color: var(--white);
+  border: 0;
+  border-radius: var(--radius);
+  padding: 12px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.login-btn-primary:hover { background: #06121F; }
+.login-btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+.login-err {
+  background: var(--red-soft);
+  color: var(--red);
+  border: 1px solid #FCA5A5;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  font-size: 12.5px;
+  margin-bottom: 12px;
+  display: none;
+}
+.login-err.show { display: block; }
+.login-foot {
+  text-align: center;
+  margin-top: 16px;
+  font-size: 11.5px;
+  color: var(--gray-500);
+}
+.login-foot a { color: var(--eq-blue); text-decoration: none; font-weight: 600; }
+
+/* User badge in sidebar */
+.user-badge {
+  background: var(--eq-blue-soft);
+  border: 1px solid #C6DDF2;
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.user-avatar {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: var(--eq-blue);
+  color: var(--white);
+  display: grid; place-items: center;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: -0.01em;
+  flex-shrink: 0;
+}
+.user-info { min-width: 0; flex: 1; }
+.user-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--eq-navy);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.user-role {
+  font-size: 10.5px;
+  color: var(--gray-600);
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.user-logout {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  color: var(--gray-500);
+  padding: 4px;
+  border-radius: 4px;
+  display: grid; place-items: center;
+  flex-shrink: 0;
+}
+.user-logout:hover { color: var(--red); background: var(--red-soft); }
+.user-logout svg { width: 14px; height: 14px; }
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN OVERLAY ============ -->
+<div class="login-shell" id="loginShell">
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="login-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 19 L4 5 L9 5"/>
+          <path d="M9 12 L13 8 L17 14 L21 9"/>
+          <path d="M4 19 L20 19"/>
+        </svg>
+      </div>
+      <div class="login-name">EQUILEC</div>
+    </div>
+    <div class="login-title">Cotizador</div>
+    <div class="login-sub">Acceso del equipo comercial</div>
+    <div class="login-err" id="loginErr"></div>
+    <input class="login-input" type="email" id="loginEmail" placeholder="tu correo @equilec.cl" autocomplete="username" />
+    <input class="login-input" type="password" id="loginPwd" placeholder="Contraseña" autocomplete="current-password" />
+    <button class="login-btn-primary" id="loginBtn" onclick="doLogin()">Ingresar</button>
+    <div class="login-foot">
+      ¿Olvidaste tu contraseña? Contacta a tu administrador.
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     APP SHELL
+============================================================ -->
+<div class="app">
+
+  <!-- ─── SIDEBAR ─── -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 19 L4 5 L9 5"/>
+          <path d="M9 12 L13 8 L17 14 L21 9"/>
+          <path d="M4 19 L20 19"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <div class="brand-name">EQUILEC</div>
+        <div class="brand-sub">Cotizador</div>
+      </div>
+    </div>
+
+    <button class="btn-new" onclick="newCotizacion()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="5" x2="12" y2="19"/>
+        <line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+      Nueva cotización
+    </button>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Historial</div>
+      <div class="history-list" id="historyList">
+        <div class="history-empty">Sin cotizaciones guardadas</div>
+      </div>
+    </div>
+
+    <div class="sidebar-footer" style="display:flex;flex-direction:column;gap:12px;">
+      <div class="user-badge" id="userBadge">
+        <div class="user-avatar" id="userAvatar">—</div>
+        <div class="user-info">
+          <div class="user-name" id="userName">—</div>
+          <div class="user-role" id="userRole">—</div>
+        </div>
+        <button class="user-logout" onclick="doLogout()" title="Cerrar sesión" aria-label="Cerrar sesión">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+      <a href="/admin" style="display:block;padding:9px 11px;border-radius:6px;background:var(--gray-50);border:1px solid var(--gray-200);color:var(--eq-navy);font-weight:600;font-size:12px;text-decoration:none;text-align:center;transition:all .12s;" onmouseover="this.style.background='var(--eq-blue-soft)';this.style.borderColor='var(--eq-blue)';this.style.color='var(--eq-blue)';" onmouseout="this.style.background='var(--gray-50)';this.style.borderColor='var(--gray-200)';this.style.color='var(--eq-navy)';">
+        Ver repositorio →
+      </a>
+      <div style="text-align:center;font-size:11px;color:var(--gray-500);padding-top:8px;border-top:1px solid var(--gray-200);">
+        Desarrollado por<br/>
+        <strong style="color:var(--eq-blue);">Heat IA</strong>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ─── MAIN ─── -->
+  <main class="main">
+
+    <!-- TOP BAR -->
+    <div class="topbar">
+      <div class="topbar-left">
+        <div>
+          <div class="cot-label">Cotización N°</div>
+          <div class="cot-number" id="cotNumber">001</div>
+        </div>
+        <div>
+          <div class="cot-label">Fecha</div>
+          <div class="cot-date" id="cotDate">—</div>
+        </div>
+        <span class="status-badge">Borrador</span>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-secondary" onclick="saveCotizacion()" title="Guardar en historial">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          Guardar
+        </button>
+        <button class="btn btn-primary" onclick="generatePDF()" title="Generar PDF">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          Generar PDF
+        </button>
+      </div>
+    </div>
+
+    <!-- CLIENTE -->
+    <section class="card">
+      <div class="card-header">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Datos del cliente
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="client-grid">
+          <div class="field">
+            <label class="field-label">Facturado a</label>
+            <input class="field-input" id="clientName" placeholder="Razón social del cliente" />
+          </div>
+          <div class="field">
+            <label class="field-label">RUT</label>
+            <input class="field-input" id="clientRut" placeholder="76.580.030-2" />
+          </div>
+          <div class="field">
+            <label class="field-label">Dirección</label>
+            <input class="field-input" id="clientAddress" placeholder="Comuna o dirección" />
+          </div>
+          <div class="field">
+            <label class="field-label">Contacto</label>
+            <input class="field-input" id="clientContact" placeholder="Nombre del contacto" />
+          </div>
+          <div class="field">
+            <label class="field-label">Email</label>
+            <input class="field-input" id="clientEmail" type="email" placeholder="cliente@ejemplo.cl" />
+          </div>
+          <div class="field">
+            <label class="field-label">Referencia</label>
+            <input class="field-input" id="clientReference" placeholder="Ej: 7.5HP 4P WEG" />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ITEMS -->
+    <section class="card">
+      <div class="card-header">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 L3 6 L3 20 a2 2 0 0 0 2 2 h14 a2 2 0 0 0 2 -2 V6 L18 2 Z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10 a4 4 0 0 1 -8 0"/></svg>
+          Productos
+        </div>
+        <div class="items-toolbar">
+          <button class="btn btn-primary" onclick="openCatalog()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Buscar en catálogo
+          </button>
+          <button class="btn btn-secondary" onclick="addItem()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Línea manual
+          </button>
+        </div>
+      </div>
+      <div class="card-body" style="padding: 14px 20px;">
+        <div class="items-table-wrap">
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th class="col-code">Código</th>
+                <th>Descripción</th>
+                <th class="col-qty" style="text-align: right;">Cant.</th>
+                <th class="col-cost" style="text-align: right;">Costo unit.</th>
+                <th class="col-price" style="text-align: right;">P. venta</th>
+                <th class="col-margen" style="text-align: right;">Margen</th>
+                <th class="col-total" style="text-align: right;">Total neto</th>
+                <th class="col-actions"></th>
+              </tr>
+            </thead>
+            <tbody id="itemsBody">
+              <!-- rows injected here -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TERMS + TOTALS GRID -->
+    <div class="bottom-grid">
+
+      <section class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>
+            Condiciones comerciales
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="terms-grid">
+            <div class="field">
+              <label class="field-label">Condición de pago</label>
+              <input class="field-input" id="termsPayment" value="30 días" />
+            </div>
+            <div class="field">
+              <label class="field-label">Validez de la oferta</label>
+              <input class="field-input" id="termsValidity" value="15 días" />
+            </div>
+            <div class="field">
+              <label class="field-label">Plazo de entrega</label>
+              <input class="field-input" id="termsDelivery" value="48 horas" />
+            </div>
+            <div class="field">
+              <label class="field-label">Lugar de entrega</label>
+              <input class="field-input" id="termsLocation" value="Bodega Equilec, La Florida, Santiago" />
+            </div>
+            <div class="field field-obs">
+              <label class="field-label">Observaciones</label>
+              <textarea class="field-textarea" id="termsObservations" rows="2">Material ofertado cumple 100% con lo solicitado.</textarea>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div style="display: flex; flex-direction: column; gap: 18px;">
+
+        <!-- TOTALS -->
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title">Resumen</div>
+          </div>
+          <div class="totals">
+            <div class="totals-row subtotal"><span class="label">Subtotal</span><span class="value" id="sumSubtotal">$ 0</span></div>
+            <div class="totals-row margen"><span class="label">Margen</span><span class="value"><span id="sumMargen">$ 0</span> <span id="sumMargenPct" class="margen-pct">0.0%</span></span></div>
+            <div class="totals-row"><span class="label">Neto</span><span class="value" id="sumNeto">$ 0</span></div>
+            <div class="totals-row iva"><span class="label">IVA 19%</span><span class="value" id="sumIva">$ 0</span></div>
+            <div class="totals-row total"><span class="label">Total</span><span class="value" id="sumTotal">$ 0</span></div>
+          </div>
+        </section>
+
+        <!-- VENDEDOR -->
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Ejecutivo comercial
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="vendor-grid">
+              <div class="field" style="grid-column: 1 / -1;">
+                <label class="field-label">Nombre</label>
+                <input class="field-input" id="vendorName" value="Andrés Cruz" />
+              </div>
+              <div class="field" style="grid-column: 1 / -1;">
+                <label class="field-label">Cargo</label>
+                <input class="field-input" id="vendorRole" value="Ventas Corporativas" />
+              </div>
+              <div class="field">
+                <label class="field-label">Email</label>
+                <input class="field-input" id="vendorEmail" value="acruz@equilec.cl" />
+              </div>
+              <div class="field">
+                <label class="field-label">Teléfono</label>
+                <input class="field-input" id="vendorPhone" value="+56 9 4388 2384" />
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ============================================================
+     CATALOG MODAL
+============================================================ -->
+<div class="modal-overlay" id="catalogModal" onclick="if(event.target===this) closeCatalog()">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Catálogo de productos</div>
+        <div class="modal-subtitle">Maestro Equilec · busca por código, descripción o marca</div>
+      </div>
+      <button class="modal-close" onclick="closeCatalog()" aria-label="Cerrar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div class="modal-filters">
+      <div class="search-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input class="search-input" id="catalogSearch" placeholder="Buscar — ej: motor 5HP WEG, contactor Siemens, 3RH..." autocomplete="off" />
+      </div>
+      <div class="filter-chips" id="familyChips">
+        <span class="chip-label">Familia:</span>
+        <button class="chip active" data-fam="">Todas</button>
+      </div>
+      <div class="filter-row">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="chip-label" style="margin: 0;">Marca:</span>
+          <select class="filter-select" id="filterBrand">
+            <option value="">Todas las marcas</option>
+          </select>
+        </div>
+        <label class="filter-toggle">
+          <input type="checkbox" id="filterPriced" />
+          Solo con precio
+        </label>
+      </div>
+    </div>
+
+    <div class="modal-body" id="catalogList">
+      <div class="empty-results">Cargando catálogo…</div>
+    </div>
+
+    <div class="modal-footer">
+      <div class="count"><strong id="resultCount">0</strong> de <strong id="totalCount">0</strong> productos</div>
+      <div style="font-size: 11.5px; color: var(--gray-500);">
+        <span style="background:#FEF3C7;color:var(--amber);padding:2px 8px;border-radius:4px;font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;">A cotizar</span>
+        &nbsp;= producto sin precio publicado
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+  <span id="toastMsg">Listo</span>
+</div>
+
+<script>
+/* =========================================================================
+   CONSTANTS & STATE
+   ========================================================================= */
+const COMPANY = {
+  name: 'EQUILEC SOC COM LTDA',
+  rut: '76.580.030-2',
+  address: 'Picton 8973, La Florida, Santiago, Región Metropolitana',
+  phone: '(56-2) 2419 5410',
+  web: 'www.equilec.cl',
+  email: 'ventas@equilec.cl'
+};
+
+let PRODUCTS = [];
+let CURRENT_USER = null;
+let AUTH_TOKEN = '';
+const TOKEN_KEY = 'equilec_vendor_token';
+
+let state = {
+  cotNumber: 1,
+  items: [],
+  selectedFamily: '',
+  selectedBrand: '',
+  onlyPriced: false,
+  search: ''
+};
+
+/* =========================================================================
+   UTILITIES
+   ========================================================================= */
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => '$ ' + (n || 0).toLocaleString('es-CL');
+const fmtDate = (d) => {
+  const months = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  return `${d.getDate()} de ${months[d.getMonth()]} de ${d.getFullYear()}`;
+};
+const todayShort = () => {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
+};
+const uid = () => Math.random().toString(36).slice(2, 9);
+
+function toast(msg) {
+  $('toastMsg').textContent = msg;
+  $('toast').classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => $('toast').classList.remove('show'), 2200);
+}
+
+/* =========================================================================
+   AUTH
+   ========================================================================= */
+async function checkAuthAndInit() {
+  AUTH_TOKEN = localStorage.getItem(TOKEN_KEY) || '';
+  if (!AUTH_TOKEN) { showLogin(); return; }
+  try {
+    const r = await fetch('/api/auth/me', {
+      headers: { 'authorization': 'Bearer ' + AUTH_TOKEN }
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error('expired');
+    CURRENT_USER = d.user;
+    enterApp();
+  } catch {
+    localStorage.removeItem(TOKEN_KEY);
+    AUTH_TOKEN = '';
+    showLogin();
+  }
+}
+
+function showLogin() {
+  $('loginShell').classList.remove('hidden');
+  setTimeout(() => $('loginEmail').focus(), 50);
+}
+
+async function doLogin() {
+  const email = $('loginEmail').value.trim();
+  const password = $('loginPwd').value;
+  const err = $('loginErr');
+  const btn = $('loginBtn');
+  err.classList.remove('show');
+
+  if (!email || !password) {
+    err.textContent = 'Ingresa correo y contraseña';
+    err.classList.add('show');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Verificando…';
+  try {
+    const r = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'Error');
+    AUTH_TOKEN = d.token;
+    CURRENT_USER = d.user;
+    localStorage.setItem(TOKEN_KEY, AUTH_TOKEN);
+    enterApp();
+  } catch (e) {
+    err.textContent = e.message || 'Credenciales inválidas';
+    err.classList.add('show');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Ingresar';
+  }
+}
+
+function doLogout() {
+  if (!confirm('¿Cerrar sesión?')) return;
+  localStorage.removeItem(TOKEN_KEY);
+  AUTH_TOKEN = '';
+  CURRENT_USER = null;
+  location.reload();
+}
+
+function enterApp() {
+  $('loginShell').classList.add('hidden');
+  // Populate user badge
+  const initials = (CURRENT_USER.name || CURRENT_USER.email).split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+  $('userAvatar').textContent = initials || '?';
+  $('userName').textContent = CURRENT_USER.name || CURRENT_USER.email;
+  $('userRole').textContent = CURRENT_USER.role || CURRENT_USER.email;
+  // Auto-fill vendor block
+  $('vendorName').value = CURRENT_USER.name || '';
+  $('vendorRole').value = CURRENT_USER.role || '';
+  $('vendorEmail').value = CURRENT_USER.email || '';
+  $('vendorPhone').value = CURRENT_USER.phone || '';
+  // Start the app
+  init();
+}
+
+/** Wrapper around fetch that includes auth header and handles 401 by forcing re-login. */
+async function authFetch(url, opts) {
+  opts = opts || {};
+  opts.headers = opts.headers || {};
+  opts.headers['authorization'] = 'Bearer ' + AUTH_TOKEN;
+  const r = await fetch(url, opts);
+  if (r.status === 401) {
+    localStorage.removeItem(TOKEN_KEY);
+    toast('Tu sesión expiró. Vuelve a iniciar sesión.');
+    setTimeout(() => location.reload(), 1500);
+    throw new Error('Sesión expirada');
+  }
+  return r;
+}
+
+/* =========================================================================
+   INIT
+   ========================================================================= */
+async function init() {
+  // Show next folio (peek — server assigns the actual one at save time)
+  $('cotNumber').textContent = '…';
+  $('cotDate').textContent = fmtDate(new Date());
+  fetch('/api/next-number').then(r => r.json()).then(d => {
+    if (d.ok) $('cotNumber').textContent = String(d.next);
+  }).catch(() => {});
+
+  state.cotNumber = 0;
+  state.savedAt = null;
+
+  // Add one empty row to start
+  addItem();
+
+  // Load product catalog
+  try {
+    const res = await fetch('products.json');
+    PRODUCTS = await res.json();
+    buildCatalogFilters();
+    renderCatalog();
+  } catch (e) {
+    console.error('Error loading catalog:', e);
+    $('catalogList').innerHTML = '<div class="empty-results">No se pudo cargar el catálogo. Verifica que products.json exista.</div>';
+  }
+
+  // Load history (from localStorage cache — full repo is in /admin)
+  loadHistory();
+
+  // Deep-link support: /?load=<folio> opens a specific cotización
+  const params = new URLSearchParams(location.search);
+  const loadId = parseInt(params.get('load') || '0', 10);
+  if (loadId > 0) {
+    loadCotizacion(loadId);
+    // Clean the URL
+    history.replaceState(null, '', location.pathname);
+  }
+
+  // Wire up live total calculation
+  document.addEventListener('input', (e) => {
+    if (e.target.closest('.items-table')) recalcTotals();
+  });
+
+  // Catalog search debounced
+  let searchTimer;
+  $('catalogSearch').addEventListener('input', (e) => {
+    state.search = e.target.value.trim().toLowerCase();
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(renderCatalog, 120);
+  });
+  $('filterBrand').addEventListener('change', (e) => {
+    state.selectedBrand = e.target.value;
+    renderCatalog();
+  });
+  $('filterPriced').addEventListener('change', (e) => {
+    state.onlyPriced = e.target.checked;
+    renderCatalog();
+  });
+
+  // ESC closes modal
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && $('catalogModal').classList.contains('open')) closeCatalog();
+  });
+}
+
+/* =========================================================================
+   ITEMS
+   ========================================================================= */
+function addItem(prefill) {
+  const item = prefill || { id: uid(), code: '', desc: '', qty: 1, cost: 0, price: 0 };
+  if (!prefill) item.id = uid();
+  // Ensure cost field exists for backwards compat
+  if (item.cost == null) item.cost = 0;
+  state.items.push(item);
+  renderItems();
+}
+function removeItem(id) {
+  state.items = state.items.filter(i => i.id !== id);
+  if (state.items.length === 0) addItem();
+  renderItems();
+}
+
+function renderItems() {
+  const tbody = $('itemsBody');
+  tbody.innerHTML = '';
+  if (state.items.length === 0) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="8">Sin productos. Agrega desde el catálogo o crea una línea manual.</td></tr>';
+    recalcTotals();
+    return;
+  }
+  state.items.forEach((it) => {
+    const tr = document.createElement('tr');
+    tr.dataset.id = it.id;
+    tr.innerHTML = `
+      <td class="col-code"><input class="code-input" data-field="code" value="${escapeAttr(it.code)}" placeholder="—" /></td>
+      <td><textarea data-field="desc" rows="1" placeholder="Descripción del producto">${escapeHtml(it.desc)}</textarea></td>
+      <td class="col-qty"><input class="right" data-field="qty" type="number" min="1" value="${it.qty || 1}" /></td>
+      <td class="col-cost"><input class="right" data-field="cost" type="number" min="0" step="1" value="${it.cost || 0}" /></td>
+      <td class="col-price"><input class="right" data-field="price" type="number" min="0" step="1" value="${it.price || 0}" /></td>
+      <td class="col-margen" data-field="margen">${renderMargenCell(it)}</td>
+      <td class="col-total" data-field="total">${fmt((it.qty || 0) * (it.price || 0))}</td>
+      <td class="col-actions">
+        <button class="btn-icon" onclick="removeItem('${it.id}')" title="Eliminar línea" aria-label="Eliminar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        </button>
+      </td>`;
+    tbody.appendChild(tr);
+
+    // Auto-resize textarea + bind values
+    const ta = tr.querySelector('textarea');
+    autosize(ta);
+    tr.querySelectorAll('[data-field]').forEach(el => {
+      if (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA') return;
+      el.addEventListener('input', () => {
+        const f = el.dataset.field;
+        if (f === 'qty' || f === 'price' || f === 'cost') it[f] = parseFloat(el.value) || 0;
+        else it[f] = el.value;
+        if (f === 'qty' || f === 'price' || f === 'cost') {
+          tr.querySelector('[data-field="total"]').textContent = fmt((it.qty || 0) * (it.price || 0));
+          tr.querySelector('[data-field="margen"]').innerHTML = renderMargenCell(it);
+        }
+        if (f === 'desc') autosize(ta);
+      });
+    });
+  });
+  recalcTotals();
+}
+
+/** Compute and render the per-line margin cell (HTML string). */
+function renderMargenCell(it) {
+  const qty = it.qty || 0;
+  const price = it.price || 0;
+  const cost = it.cost || 0;
+  if (!price || !cost) {
+    return '<span class="m-empty">—</span>';
+  }
+  const margenUnit = price - cost;
+  const margenTotal = margenUnit * qty;
+  const margenPct = price > 0 ? (margenUnit / price) * 100 : 0;
+  const cls = margenPct > 0 ? 'pos' : (margenPct < 0 ? 'neg' : 'zero');
+  return `<div class="margen-cell">
+    <div class="m-pct ${cls}">${margenPct.toFixed(1)}%</div>
+    <div class="m-amt">${fmt(margenTotal)}</div>
+  </div>`;
+}
+
+function autosize(ta) {
+  ta.style.height = 'auto';
+  ta.style.height = (ta.scrollHeight + 2) + 'px';
+}
+
+function recalcTotals() {
+  const subtotal = state.items.reduce((s, i) => s + (i.qty || 0) * (i.price || 0), 0);
+  const totalCost = state.items.reduce((s, i) => s + (i.qty || 0) * (i.cost || 0), 0);
+  const margenTotal = subtotal - totalCost;
+  // Only count margen % over items that actually have cost (avoid distortion)
+  const subtotalWithCost = state.items.reduce((s, i) => {
+    return s + ((i.cost || 0) > 0 ? (i.qty || 0) * (i.price || 0) : 0);
+  }, 0);
+  const margenPct = subtotalWithCost > 0 ? (margenTotal / subtotalWithCost) * 100 : 0;
+  const iva = Math.round(subtotal * 0.19);
+  const total = subtotal + iva;
+  $('sumSubtotal').textContent = fmt(subtotal);
+  $('sumNeto').textContent = fmt(subtotal);
+  $('sumIva').textContent = fmt(iva);
+  $('sumTotal').textContent = fmt(total);
+  const elM = $('sumMargen');
+  const elMPct = $('sumMargenPct');
+  if (elM) elM.textContent = fmt(margenTotal);
+  if (elMPct) {
+    elMPct.textContent = margenPct.toFixed(1) + '%';
+    elMPct.classList.remove('pos', 'neg', 'zero');
+    elMPct.classList.add(margenPct > 0 ? 'pos' : (margenPct < 0 ? 'neg' : 'zero'));
+  }
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+}
+function escapeAttr(s) {
+  return String(s || '').replace(/"/g, '&quot;');
+}
+
+/* =========================================================================
+   CATALOG
+   ========================================================================= */
+function openCatalog() {
+  $('catalogModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => $('catalogSearch').focus(), 50);
+}
+function closeCatalog() {
+  $('catalogModal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function buildCatalogFilters() {
+  // Family chips
+  const families = [...new Set(PRODUCTS.map(p => p.fam))].sort();
+  const chipBox = $('familyChips');
+  families.forEach(f => {
+    const btn = document.createElement('button');
+    btn.className = 'chip';
+    btn.dataset.fam = f;
+    btn.textContent = familyLabel(f);
+    chipBox.appendChild(btn);
+  });
+  chipBox.addEventListener('click', (e) => {
+    if (e.target.matches('.chip')) {
+      chipBox.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+      e.target.classList.add('active');
+      state.selectedFamily = e.target.dataset.fam || '';
+      renderCatalog();
+    }
+  });
+
+  // Brand select
+  const brands = [...new Set(PRODUCTS.map(p => p.marca))].sort();
+  const sel = $('filterBrand');
+  brands.forEach(b => {
+    const opt = document.createElement('option');
+    opt.value = b;
+    opt.textContent = b;
+    sel.appendChild(opt);
+  });
+
+  $('totalCount').textContent = PRODUCTS.length;
+}
+
+function familyLabel(f) {
+  const map = {
+    'MOTORES ELECTRICOS': 'Motores',
+    'CONTROL Y MANIOBRA': 'Control y maniobra',
+    'VARIADORES DE FRECUENCIA': 'Variadores',
+    'REDUCTORES': 'Reductores',
+    'TABLEROS ELECTRICOS': 'Tableros'
+  };
+  return map[f] || f;
+}
+
+function renderCatalog() {
+  const list = $('catalogList');
+  const q = state.search;
+  const filtered = PRODUCTS.filter(p => {
+    if (state.selectedFamily && p.fam !== state.selectedFamily) return false;
+    if (state.selectedBrand && p.marca !== state.selectedBrand) return false;
+    if (state.onlyPriced && !p.precio) return false;
+    if (q) {
+      const hay = (p.cod + ' ' + p.desc + ' ' + p.marca).toLowerCase();
+      const terms = q.split(/\s+/).filter(Boolean);
+      if (!terms.every(t => hay.includes(t))) return false;
+    }
+    return true;
+  });
+
+  $('resultCount').textContent = filtered.length;
+
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="empty-results">Sin resultados. Prueba ajustando los filtros o la búsqueda.</div>';
+    return;
+  }
+
+  // Show max 200 at a time for performance
+  const shown = filtered.slice(0, 200);
+  list.innerHTML = shown.map(p => `
+    <div class="product-row">
+      <span class="product-code" title="${escapeAttr(p.cod)}">${escapeHtml(p.cod)}</span>
+      <div class="product-desc">${escapeHtml(p.desc)}</div>
+      <div class="product-meta">
+        <div class="product-brand">${escapeHtml(p.marca)}</div>
+      </div>
+      <div class="product-family">${familyLabel(p.fam)}</div>
+      <div class="product-price-wrap">
+        ${p.precio
+          ? `<div class="product-price">${fmt(p.precio)}</div>${p.stock != null ? `<div class="product-stock ${p.stock > 0 ? 'in' : ''}">${p.stock > 0 ? 'Stock: ' + p.stock : 'Sin stock'}</div>` : ''}`
+          : `<span class="product-price empty">A cotizar</span>`
+        }
+      </div>
+      <button class="btn-add" onclick="addFromCatalog('${escapeAttr(p.cod)}')">+ Agregar</button>
+    </div>
+  `).join('');
+  if (filtered.length > 200) {
+    list.insertAdjacentHTML('beforeend', `<div class="empty-results" style="padding:24px;">Mostrando los primeros 200 de ${filtered.length}. Refina tu búsqueda para ver más.</div>`);
+  }
+}
+
+function addFromCatalog(cod) {
+  const p = PRODUCTS.find(x => x.cod === cod);
+  if (!p) return;
+
+  // If the only item is an empty starter row, replace it
+  if (state.items.length === 1 && !state.items[0].code && !state.items[0].desc && !state.items[0].price) {
+    state.items[0] = { id: state.items[0].id, code: p.cod, desc: p.desc, qty: 1, cost: p.precio || 0, price: p.precio || 0 };
+  } else {
+    state.items.push({ id: uid(), code: p.cod, desc: p.desc, qty: 1, cost: p.precio || 0, price: p.precio || 0 });
+  }
+  renderItems();
+  toast(`${p.cod} agregado`);
+}
+
+/* =========================================================================
+   COTIZACIÓN MANAGEMENT — backed by Netlify Functions + Netlify Blobs
+   ========================================================================= */
+
+// state.cotNumber:
+//   - 0 = new (unsaved) — server will assign on save
+//   - >0 = existing folio — updates will overwrite
+// state.savedAt: last save timestamp (ISO)
+// Local history is kept in memory only; ground truth is the server.
+
+let HISTORY_CACHE = []; // last list from server (for sidebar)
+
+async function newCotizacion(skipConfirm) {
+  if (!skipConfirm && (state.items.some(i => i.code || i.desc) || $('clientName').value)) {
+    if (!confirm('¿Crear una nueva cotización? Los cambios sin guardar se perderán.')) return;
+  }
+
+  // Show the next folio that *will* be assigned (peek — not reserved)
+  state.cotNumber = 0;
+  state.savedAt = null;
+  try {
+    const r = await fetch('/api/next-number');
+    const d = await r.json();
+    if (d.ok) {
+      $('cotNumber').textContent = String(d.next);
+    } else {
+      $('cotNumber').textContent = '—';
+    }
+  } catch {
+    $('cotNumber').textContent = '—';
+  }
+  $('cotDate').textContent = fmtDate(new Date());
+
+  // Clear fields
+  ['clientName','clientRut','clientAddress','clientContact','clientEmail','clientReference'].forEach(id => $(id).value = '');
+  $('termsObservations').value = 'Material ofertado cumple 100% con lo solicitado.';
+
+  state.items = [];
+  addItem();
+  renderHistory();
+}
+
+async function saveCotizacion(opts) {
+  opts = opts || {};
+  const data = collectData();
+
+  if (!data.client.name) {
+    toast('Falta el nombre del cliente');
+    $('clientName').focus();
+    return null;
+  }
+  if (state.items.every(i => !i.desc)) {
+    toast('Agrega al menos un producto');
+    return null;
+  }
+
+  // Calculate totals to persist (so admin panel can display $ without re-iterating items)
+  const subtotal = state.items.reduce((s, i) => s + (i.qty || 0) * (i.price || 0), 0);
+  const iva = Math.round(subtotal * 0.19);
+  const total = subtotal + iva;
+
+  const payload = {
+    ...data,
+    number: state.cotNumber > 0 ? state.cotNumber : undefined,
+    status: 'borrador',
+    totals: { subtotal, iva, total },
+  };
+
+  try {
+    const r = await authFetch('/api/save', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'Error al guardar');
+
+    state.cotNumber = d.number;
+    state.savedAt = d.savedAt;
+    $('cotNumber').textContent = String(d.number);
+
+    if (!opts.silent) toast(`COT-${d.number} guardada`);
+    await loadHistory();
+    return d.number;
+  } catch (e) {
+    console.error(e);
+    toast('Error: ' + (e.message || 'no se pudo guardar'));
+    return null;
+  }
+}
+
+async function loadCotizacion(number) {
+  try {
+    const r = await fetch('/api/get/' + number);
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'No se pudo cargar');
+    const rec = d.cotizacion;
+
+    state.cotNumber = rec.number;
+    state.savedAt = rec.savedAt;
+    $('cotNumber').textContent = String(rec.number);
+    $('cotDate').textContent = fmtDate(new Date(rec.createdAt || rec.savedAt));
+
+    $('clientName').value = rec.client?.name || '';
+    $('clientRut').value = rec.client?.rut || '';
+    $('clientAddress').value = rec.client?.address || '';
+    $('clientContact').value = rec.client?.contact || '';
+    $('clientEmail').value = rec.client?.email || '';
+    $('clientReference').value = rec.client?.reference || '';
+
+    $('termsPayment').value = rec.terms?.payment || '';
+    $('termsValidity').value = rec.terms?.validity || '';
+    $('termsDelivery').value = rec.terms?.delivery || '';
+    $('termsLocation').value = rec.terms?.location || '';
+    $('termsObservations').value = rec.terms?.observations || '';
+
+    $('vendorName').value = rec.vendor?.name || '';
+    $('vendorRole').value = rec.vendor?.role || '';
+    $('vendorEmail').value = rec.vendor?.email || '';
+    $('vendorPhone').value = rec.vendor?.phone || '';
+
+    state.items = (rec.items || []).map(i => ({ ...i, id: uid() }));
+    if (state.items.length === 0) addItem();
+    renderItems();
+    renderHistory();
+    toast(`COT-${rec.number} cargada`);
+  } catch (e) {
+    console.error(e);
+    toast('Error al cargar: ' + (e.message || ''));
+  }
+}
+
+async function loadHistory() {
+  // Public endpoint? No — list requires admin. For the main page,
+  // we show only the cotizaciones the current user has saved during this session
+  // (stored locally) plus a hint that the full repo is in /admin.
+  // Read recent saves from localStorage to populate sidebar.
+  const local = JSON.parse(localStorage.getItem('equilec_recent_local') || '[]');
+  // If the currently-saved cot is not in local list, add it
+  if (state.cotNumber > 0 && state.savedAt) {
+    const idx = local.findIndex(h => h.number === state.cotNumber);
+    const summary = {
+      number: state.cotNumber,
+      savedAt: state.savedAt,
+      clientName: $('clientName').value.trim() || '—',
+    };
+    if (idx >= 0) local[idx] = summary;
+    else local.unshift(summary);
+    localStorage.setItem('equilec_recent_local', JSON.stringify(local.slice(0, 30)));
+  }
+  HISTORY_CACHE = local;
+  renderHistory();
+}
+
+function renderHistory() {
+  const list = $('historyList');
+  if (!HISTORY_CACHE || HISTORY_CACHE.length === 0) {
+    list.innerHTML = '<div class="history-empty">Tus cotizaciones recientes aparecerán aquí</div>';
+    return;
+  }
+  list.innerHTML = HISTORY_CACHE.map(h => `
+    <div class="history-item ${h.number === state.cotNumber ? 'active' : ''}" onclick="loadCotizacion(${h.number})">
+      <div class="history-cot">COT-${h.number}</div>
+      <div class="history-client">${escapeHtml(h.clientName || h.client?.name || '—')}</div>
+      <div class="history-date">${new Date(h.savedAt).toLocaleDateString('es-CL')}</div>
+    </div>
+  `).join('');
+}
+
+function collectData() {
+  return {
+    client: {
+      name: $('clientName').value.trim(),
+      rut: $('clientRut').value.trim(),
+      address: $('clientAddress').value.trim(),
+      contact: $('clientContact').value.trim(),
+      email: $('clientEmail').value.trim(),
+      reference: $('clientReference').value.trim()
+    },
+    terms: {
+      payment: $('termsPayment').value.trim(),
+      validity: $('termsValidity').value.trim(),
+      delivery: $('termsDelivery').value.trim(),
+      location: $('termsLocation').value.trim(),
+      observations: $('termsObservations').value.trim()
+    },
+    vendor: {
+      name: $('vendorName').value.trim(),
+      role: $('vendorRole').value.trim(),
+      email: $('vendorEmail').value.trim(),
+      phone: $('vendorPhone').value.trim()
+    },
+    items: state.items.filter(i => i.desc || i.code).map(i => ({
+      code: i.code, desc: i.desc, qty: i.qty || 0, cost: i.cost || 0, price: i.price || 0
+    }))
+  };
+}
+
+/* =========================================================================
+   PDF GENERATION
+   ========================================================================= */
+async function generatePDF() {
+  const data = collectData();
+  if (!data.client.name) { toast('Falta el nombre del cliente'); $('clientName').focus(); return; }
+  if (data.items.length === 0) { toast('Agrega al menos un producto'); return; }
+
+  // Save first to get a definitive folio number from the server
+  toast('Guardando…');
+  const assignedNumber = await saveCotizacion({ silent: true });
+  if (!assignedNumber) return; // saveCotizacion already showed error
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+
+  // Colors (RGB)
+  const C = {
+    blue:    [30, 95, 168],
+    blueDeep:[19, 75, 142],
+    blueSoft:[231, 240, 250],
+    navy:    [11, 31, 51],
+    gray700: [55, 65, 81],
+    gray600: [91, 103, 112],
+    gray400: [156, 163, 175],
+    gray200: [229, 231, 235],
+    gray100: [243, 244, 246],
+    gray50:  [249, 250, 251],
+    white:   [255, 255, 255]
+  };
+
+  const M = 40; // margin
+
+  // =========== PAGE 1 ===========
+
+  // Logo (drawn programmatically)
+  doc.setFillColor(...C.blueSoft);
+  doc.roundedRect(M, M, 32, 32, 6, 6, 'F');
+  doc.setDrawColor(...C.blue);
+  doc.setLineWidth(1.8);
+  doc.setLineCap('round');
+  doc.setLineJoin('round');
+  // Bars chart icon
+  doc.line(M + 8, M + 24, M + 8, M + 10);
+  doc.line(M + 8, M + 24, M + 24, M + 24);
+  doc.line(M + 11, M + 18, M + 14, M + 14);
+  doc.line(M + 14, M + 14, M + 18, M + 20);
+  doc.line(M + 18, M + 20, M + 22, M + 14);
+
+  // EQUILEC text
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20);
+  doc.setTextColor(...C.navy);
+  doc.text('EQUILEC', M + 44, M + 22);
+
+  // Header right block: OFERTADO badge + COT number + date
+  const rightX = W - M;
+  doc.setFillColor(...C.blueSoft);
+  doc.setDrawColor(...C.blue);
+  doc.setLineWidth(0.8);
+  const badgeW = 78, badgeH = 22;
+  doc.roundedRect(rightX - badgeW, M, badgeW, badgeH, 11, 11, 'FD');
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...C.blue);
+  doc.text('OFERTADO', rightX - badgeW / 2, M + 15, { align: 'center' });
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20);
+  doc.setTextColor(...C.navy);
+  doc.text(`COTIZACIÓN N° ${String(state.cotNumber)}`, rightX, M + 50, { align: 'right' });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(...C.gray600);
+  doc.text(fmtDate(new Date()), rightX, M + 64, { align: 'right' });
+
+  // Company info under logo
+  doc.setFontSize(8.5);
+  doc.setTextColor(...C.gray700);
+  doc.text(`${COMPANY.name} · RUT ${COMPANY.rut}`, M, M + 50);
+  doc.text(COMPANY.address, M, M + 62);
+  doc.text(`Tel. ${COMPANY.phone} · ${COMPANY.web}`, M, M + 74);
+
+  // Separator line
+  doc.setDrawColor(...C.gray200);
+  doc.setLineWidth(0.6);
+  doc.line(M, M + 92, W - M, M + 92);
+
+  // CLIENT BLOCK — two-row grid prevents overlap
+  let y = M + 112;
+  const colW = (W - 2 * M) / 4;
+
+  // First row: Facturado a (col 1-2 wide), RUT (col 3), Vendedor (col 4)
+  drawField(doc, C, 'FACTURADO A', data.client.name || '—', M, y, colW * 2 - 8, true);
+  drawField(doc, C, 'RUT', data.client.rut || '—', M + colW * 2, y, colW - 8, true);
+  drawField(doc, C, 'VENDEDOR', data.vendor.name || '—', M + colW * 3, y, colW, true);
+
+  y += 32;
+
+  // Second row: Dirección, Contacto, Validez, Plazo Entrega
+  drawField(doc, C, 'DIRECCIÓN', data.client.address || '—', M, y, colW - 8);
+  drawField(doc, C, 'CONTACTO', data.client.contact || '—', M + colW, y, colW - 8);
+  drawField(doc, C, 'VALIDEZ', data.terms.validity || '—', M + colW * 2, y, colW - 8);
+  drawField(doc, C, 'PLAZO DE ENTREGA', data.terms.delivery || '—', M + colW * 3, y, colW);
+
+  y += 32;
+
+  // Third row: Cond pago, Email, Referencia (spans 2)
+  drawField(doc, C, 'CONDICIÓN DE PAGO', data.terms.payment || '—', M, y, colW - 8);
+  drawField(doc, C, 'EMAIL', data.client.email || '—', M + colW, y, colW - 8);
+  drawField(doc, C, 'REFERENCIA', data.client.reference || '—', M + colW * 2, y, colW * 2 - 8);
+
+  y += 38;
+
+  // ITEMS TABLE
+  doc.autoTable({
+    startY: y,
+    head: [['CÓDIGO', 'DESCRIPCIÓN', 'CANT.', 'P. UNITARIO', 'TOTAL NETO']],
+    body: data.items.map(i => [
+      i.code || '—',
+      i.desc || '',
+      String(i.qty),
+      i.price ? fmt(i.price) : '—',
+      fmt((i.qty || 0) * (i.price || 0))
+    ]),
+    theme: 'plain',
+    margin: { left: M, right: M },
+    styles: {
+      font: 'helvetica',
+      fontSize: 9,
+      cellPadding: { top: 9, right: 8, bottom: 9, left: 8 },
+      textColor: C.navy,
+      lineColor: C.gray200,
+      lineWidth: { bottom: 0.5 }
+    },
+    headStyles: {
+      fillColor: C.gray50,
+      textColor: C.gray700,
+      fontSize: 8.5,
+      fontStyle: 'bold',
+      cellPadding: { top: 10, right: 8, bottom: 10, left: 8 },
+      lineWidth: { bottom: 1, top: 1 },
+      lineColor: C.gray200
+    },
+    columnStyles: {
+      0: { cellWidth: 75, font: 'courier', fontSize: 8.5, textColor: C.gray700 },
+      1: { cellWidth: 'auto' },
+      2: { cellWidth: 40, halign: 'right' },
+      3: { cellWidth: 75, halign: 'right' },
+      4: { cellWidth: 90, halign: 'right', fontStyle: 'bold' }
+    },
+    didParseCell: (data) => {
+      if (data.section === 'head') {
+        data.cell.styles.textColor = C.gray600;
+      }
+    }
+  });
+
+  let endY = doc.lastAutoTable.finalY;
+
+  // TOTALS
+  const subtotal = data.items.reduce((s, i) => s + (i.qty || 0) * (i.price || 0), 0);
+  const iva = Math.round(subtotal * 0.19);
+  const total = subtotal + iva;
+
+  const totalsX = W - M - 220;
+  endY += 20;
+
+  doc.setFontSize(9.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...C.gray600);
+  doc.text('Subtotal', totalsX, endY);
+  doc.setTextColor(...C.navy);
+  doc.text(fmt(subtotal), W - M, endY, { align: 'right' });
+
+  endY += 16;
+  doc.setTextColor(...C.gray600);
+  doc.text('Neto', totalsX, endY);
+  doc.setTextColor(...C.navy);
+  doc.text(fmt(subtotal), W - M, endY, { align: 'right' });
+
+  endY += 16;
+  doc.setTextColor(...C.gray600);
+  doc.text('I.V.A. 19%', totalsX, endY);
+  doc.setTextColor(...C.navy);
+  doc.text(fmt(iva), W - M, endY, { align: 'right' });
+
+  endY += 14;
+  // Total bar
+  doc.setFillColor(...C.blue);
+  doc.rect(totalsX - 14, endY, W - M - (totalsX - 14), 30, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(...C.white);
+  doc.text('TOTAL', totalsX, endY + 20);
+  doc.setFontSize(13);
+  doc.text(fmt(total), W - M - 6, endY + 20, { align: 'right' });
+  endY += 38;
+
+  // OBSERVATIONS
+  if (data.terms.observations) {
+    endY += 14;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(...C.gray700);
+    doc.text('OBSERVACIONES', M, endY);
+    endY += 12;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    doc.setTextColor(...C.gray700);
+    const obsLines = doc.splitTextToSize(data.terms.observations, W - 2 * M);
+    doc.text(obsLines, M, endY);
+    endY += obsLines.length * 12;
+  }
+
+  endY += 18;
+
+  // COMMERCIAL TERMS BOX + VENDOR BOX
+  const boxH = 116;
+  // Left box
+  const boxW = (W - 2 * M - 14) / 2;
+
+  // Left: Commercial conditions
+  doc.setDrawColor(...C.gray200);
+  doc.setLineWidth(0.6);
+  doc.roundedRect(M, endY, boxW, boxH, 6, 6, 'S');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...C.gray700);
+  doc.text('CONDICIONES COMERCIALES', M + 14, endY + 18);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(...C.gray700);
+  const conds = [
+    `Condición de pago: ${data.terms.payment}`,
+    `Validez de la cotización: ${data.terms.validity}`,
+    `Plazo de entrega: ${data.terms.delivery}`,
+    `Precios netos no incluyen IVA (19%).`,
+    `Material entregado en ${data.terms.location}.`
+  ];
+  let condY = endY + 34;
+  conds.forEach(c => {
+    doc.setFillColor(...C.blue);
+    doc.circle(M + 18, condY - 3, 1.4, 'F');
+    const lines = doc.splitTextToSize(c, boxW - 38);
+    doc.text(lines, M + 24, condY);
+    condY += lines.length * 11 + 3;
+  });
+
+  // Right: Vendor
+  const rBoxX = M + boxW + 14;
+  doc.setFillColor(...C.blueSoft);
+  doc.roundedRect(rBoxX, endY, boxW, boxH, 6, 6, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...C.blueDeep);
+  doc.text('SU EJECUTIVO COMERCIAL', rBoxX + 14, endY + 18);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(...C.navy);
+  doc.text(data.vendor.name, rBoxX + 14, endY + 38);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5);
+  doc.setTextColor(...C.gray700);
+  doc.text(data.vendor.role, rBoxX + 14, endY + 54);
+  doc.text(data.vendor.email, rBoxX + 14, endY + 70);
+  doc.text(data.vendor.phone, rBoxX + 14, endY + 84);
+
+  doc.setDrawColor(...C.blue);
+  doc.setLineWidth(0.4);
+  doc.line(rBoxX + 14, endY + 92, rBoxX + boxW - 14, endY + 92);
+
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...C.blue);
+  doc.text(`Equilec · ${COMPANY.email}`, rBoxX + 14, endY + 104);
+
+  // Bottom thank you + footer
+  endY = H - 90;
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(11);
+  doc.setTextColor(...C.gray700);
+  doc.text('Gracias por preferir Equilec.', M, endY);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(...C.gray600);
+  doc.text('Quedamos atentos a sus consultas y comentarios.', M, endY + 14);
+
+  // Bottom blue strip
+  doc.setFillColor(...C.blue);
+  doc.rect(0, H - 30, W, 30, 'F');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...C.white);
+  doc.text(
+    `${COMPANY.web} · ${COMPANY.email} · Cotización COT-${String(state.cotNumber)} generada el ${todayShort()}`,
+    W / 2, H - 12, { align: 'center' }
+  );
+
+  // =========== PAGE 2 ===========
+  doc.addPage();
+
+  // Header
+  doc.setFillColor(...C.blue);
+  doc.rect(0, 0, W, 6, 'F');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.setTextColor(...C.navy);
+  doc.text('Condiciones Generales de Suministro', M, M + 14);
+
+  doc.setDrawColor(...C.gray200);
+  doc.setLineWidth(0.6);
+  doc.line(M, M + 24, W - M, M + 24);
+
+  let p2y = M + 44;
+
+  const sections = [
+    {
+      title: 'Precio y Condiciones de Pago',
+      items: [
+        'Los precios son netos y no incluyen el impuesto al valor agregado (IVA).',
+        'El precio será facturado contra despacho o retiro de material o prestación del servicio.',
+        'El pago se considera según plazo acordado a partir de la fecha de emisión de la factura.',
+        'La condición de pago está sujeta a confirmación de nuestra área de finanzas.',
+        'En oferta en USD u otra moneda extranjera, el pago será su equivalente en moneda nacional a la fecha de facturación.',
+        'En caso de pago fuera de la fecha de vencimiento, devengará interés por mora equivalente al interés máximo convencional anual.'
+      ]
+    },
+    {
+      title: 'Plazos y Lugar de Entrega',
+      items: [
+        'El cumplimiento de plazos de entrega está supeditado al recibo a tiempo de documentación, anticipos, permisos, validación de planos y demás obligaciones del cliente.',
+        'El plazo de entrega se cuenta a partir de la recepción de la orden de compra confirmada por Equilec.',
+        'Los suministros serán entregados sobre camión en bodega Equilec, Picton 8973, La Florida, Santiago, salvo acuerdo contrario.',
+        'El cliente es responsable del material una vez despachado de las oficinas de Equilec.',
+        'El cliente debe revisar las hojas técnicas de cada equipo antes de su encargo, adquisición y utilización.'
+      ]
+    },
+    {
+      title: 'Garantía',
+      items: [
+        'Equilec otorga una garantía válida por 6 meses desde la fecha de facturación. En proyectos o fabricación de productos podrá variar y se especificará en la oferta.',
+        'La garantía cubre defectos de materiales o de fabricación. Excluye desgaste normal, mal uso, intervenciones no autorizadas, exposición a fuego/agua/humedad, o configuraciones inadecuadas.',
+        'La reparación o cambio no prolonga ni renueva la garantía.',
+        'La garantía queda limitada al valor y a los productos de la venta y orden acordada.'
+      ]
+    },
+    {
+      title: 'Devolución o Cambio',
+      items: [
+        'El cliente puede tramitar devolución o cambio coordinando con su vendedor y enviando el producto a nuestra oficina en Picton 8973, La Florida, Santiago, con guía de despacho mencionando el número de factura y dentro del plazo legal de 90 días.',
+        'El producto será sometido a revisión y deberá ser aprobado para iniciar el proceso de nota de crédito. No se recibirá material usado, sin embalaje, sin sellos o faltos de accesorios o manuales.',
+        'Los costos de traslado a Equilec son de cargo del cliente.'
+      ]
+    },
+    {
+      title: 'Aceptación de Condiciones Generales de Suministro',
+      items: [
+        'La adjudicación de la oferta o la emisión por parte del cliente de la orden de compra supone la aceptación formal de todas las condiciones señaladas en el presente documento.'
+      ]
+    }
+  ];
+
+  sections.forEach(s => {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10.5);
+    doc.setTextColor(...C.navy);
+    doc.text(s.title, M, p2y);
+    p2y += 14;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(...C.gray700);
+    s.items.forEach(it => {
+      doc.setFillColor(...C.blue);
+      doc.circle(M + 4, p2y - 3, 1.2, 'F');
+      const lines = doc.splitTextToSize(it, W - 2 * M - 12);
+      doc.text(lines, M + 12, p2y);
+      p2y += lines.length * 10.5 + 4;
+    });
+    p2y += 8;
+  });
+
+  // Footer p2
+  doc.setFillColor(...C.blue);
+  doc.rect(0, H - 30, W, 30, 'F');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...C.white);
+  doc.text(
+    `${COMPANY.web} · ${COMPANY.email} · Cotización COT-${String(state.cotNumber)} - Página 2/2`,
+    W / 2, H - 12, { align: 'center' }
+  );
+
+  // SAVE
+  const filename = `COT-${String(state.cotNumber)}_${(data.client.name || 'cliente').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30)}.pdf`;
+  doc.save(filename);
+
+  toast(`PDF generado: ${filename}`);
+}
+
+function drawField(doc, C, label, value, x, y, maxW, bold) {
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(...C.gray600);
+  doc.text(label, x, y);
+
+  const text = value || '—';
+  doc.setTextColor(...C.navy);
+
+  // Adaptive font sizing: try 10.5pt first, drop to 9.5pt if needed, then 8.5pt
+  const sizes = [10.5, 9.5, 8.5];
+  let chosenSize = sizes[0], chosenLines = [];
+  for (const sz of sizes) {
+    doc.setFont('helvetica', bold ? 'bold' : 'normal');
+    doc.setFontSize(sz);
+    const lines = doc.splitTextToSize(text, maxW);
+    if (lines.length === 1) { chosenSize = sz; chosenLines = lines; break; }
+    if (lines.length <= 2 && sz <= 9.5) { chosenSize = sz; chosenLines = lines.slice(0, 2); break; }
+    chosenSize = sz; chosenLines = lines.slice(0, 2);
+  }
+  doc.setFont('helvetica', bold ? 'bold' : 'normal');
+  doc.setFontSize(chosenSize);
+  doc.text(chosenLines, x, y + 14);
+}
+
+// Wire login keyboard: Enter submits
+document.getElementById('loginPwd').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') doLogin();
+});
+document.getElementById('loginEmail').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('loginPwd').focus();
+});
+
+// Start
+checkAuthAndInit();
+</script>
+</body>
+</html>
