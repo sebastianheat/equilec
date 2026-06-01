@@ -2,9 +2,9 @@
 // POST /api/login — admin login.
 // Body: { password }; Response: { ok, token }
 
-import { json, preflight } from "./_lib.mjs";
+import { json, preflight, withWeb } from "./_lib.mjs";
 
-export default async (req) => {
+export default withWeb(async (req) => {
   if (req.method === "OPTIONS") return preflight();
   if (req.method !== "POST") return json({ ok: false, error: "Method not allowed" }, 405);
 
@@ -19,5 +19,5 @@ export default async (req) => {
   }
 
   return json({ ok: true, token: expected });
-};
+});
 

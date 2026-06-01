@@ -2,9 +2,9 @@
 // POST /api/set-counter — admin-only. Sets the folio counter to a specific value.
 // Body: { next: <number> }
 
-import { writeCounter, isAuthed, json, preflight } from "./_lib.mjs";
+import { writeCounter, isAuthed, json, preflight, withWeb } from "./_lib.mjs";
 
-export default async (req) => {
+export default withWeb(async (req) => {
   if (req.method === "OPTIONS") return preflight();
   if (req.method !== "POST") return json({ ok: false, error: "Method not allowed" }, 405);
   if (!isAuthed(req)) return json({ ok: false, error: "No autorizado" }, 401);
@@ -19,5 +19,5 @@ export default async (req) => {
 
   await writeCounter(n);
   return json({ ok: true, next: n });
-};
+});
 

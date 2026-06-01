@@ -1,9 +1,9 @@
 // netlify/functions/list.mjs
 // GET /api/list — list all cotizaciones (admin auth required)
 
-import { db, isAuthed, json, preflight } from "./_lib.mjs";
+import { db, isAuthed, json, preflight, withWeb } from "./_lib.mjs";
 
-export default async (req) => {
+export default withWeb(async (req) => {
   if (req.method === "OPTIONS") return preflight();
   if (req.method !== "GET") return json({ ok: false, error: "Method not allowed" }, 405);
   if (!isAuthed(req)) return json({ ok: false, error: "No autorizado" }, 401);
@@ -28,5 +28,5 @@ export default async (req) => {
   }));
 
   return json({ ok: true, items, count: items.length });
-};
+});
 

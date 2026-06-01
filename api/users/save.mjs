@@ -2,9 +2,9 @@
 // POST /api/users/save — admin creates or updates a user
 // Body: { email, name, role, phone, password?, active? }
 
-import { db, isAdmin, hashPassword, normalizeEmail, json, preflight } from "../_lib.mjs";
+import { db, isAdmin, hashPassword, normalizeEmail, json, preflight, withWeb } from "../_lib.mjs";
 
-export default async (req) => {
+export default withWeb(async (req) => {
   if (req.method === "OPTIONS") return preflight();
   if (req.method !== "POST") return json({ ok: false, error: "Method not allowed" }, 405);
   if (!isAdmin(req)) return json({ ok: false, error: "No autorizado" }, 401);
@@ -58,5 +58,5 @@ export default async (req) => {
     user: { email, name, role, phone, active },
     isNew: !existing,
   });
-};
+});
 

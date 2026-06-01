@@ -1,9 +1,9 @@
 // netlify/functions/auth-login.mjs
 // POST /api/auth/login — vendor login
 
-import { db, normalizeEmail, verifyPassword, issueToken, json, preflight } from "../_lib.mjs";
+import { db, normalizeEmail, verifyPassword, issueToken, json, preflight, withWeb } from "../_lib.mjs";
 
-export default async (req) => {
+export default withWeb(async (req) => {
   if (req.method === "OPTIONS") return preflight();
   if (req.method !== "POST") return json({ ok: false, error: "Method not allowed" }, 405);
 
@@ -36,5 +36,5 @@ export default async (req) => {
     token,
     user: { email: user.email, name: user.name, role: user.role, phone: user.phone, active: user.active }
   });
-};
+});
 

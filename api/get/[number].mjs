@@ -1,9 +1,9 @@
 // netlify/functions/get.mjs
 // GET /api/get/:number — returns a single cotización
 
-import { db, json, preflight } from "../_lib.mjs";
+import { db, json, preflight, withWeb } from "../_lib.mjs";
 
-export default async (req) => {
+export default withWeb(async (req) => {
   if (req.method === "OPTIONS") return preflight();
   if (req.method !== "GET") return json({ ok: false, error: "Method not allowed" }, 405);
 
@@ -40,5 +40,5 @@ export default async (req) => {
   };
 
   return json({ ok: true, cotizacion });
-};
+});
 

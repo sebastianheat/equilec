@@ -1,9 +1,9 @@
 // netlify/functions/users-delete.mjs
 // DELETE /api/users/delete/:email — admin deletes a user
 
-import { db, isAdmin, normalizeEmail, json, preflight } from "../../_lib.mjs";
+import { db, isAdmin, normalizeEmail, json, preflight, withWeb } from "../../_lib.mjs";
 
-export default async (req) => {
+export default withWeb(async (req) => {
   if (req.method === "OPTIONS") return preflight();
   if (req.method !== "DELETE" && req.method !== "POST") {
     return json({ ok: false, error: "Method not allowed" }, 405);
@@ -17,5 +17,5 @@ export default async (req) => {
 
   await db().sql`DELETE FROM users WHERE email = ${email}`;
   return json({ ok: true, deleted: email });
-};
+});
 

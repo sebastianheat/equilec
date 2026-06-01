@@ -92,6 +92,57 @@ export function json(data, status = 200) {
   });
 }
 
+/* ============================================================
+   VERCEL ADAPTER — Node (req,res)  <->  Web (Request/Response)
+   Vercel's Node runtime invokes handlers as (req, res) with a
+   Node IncomingMessage. Our handlers are written against the Web
+   standard (req.headers.get, req.json(), return Response). This
+   wrapper bridges the two so the ported logic stays unchanged.
+   ============================================================ */
+export function withWeb(handler) {
+  return async function (req, res) {
+    try {
+      const proto = req.headers["x-forwarded-proto"] || "https";
+      const host = req.headers["x-forwarded-host"] || req.headers.host || "localhost";
+      const url = `${proto}://${host}${req.url || "/"}`;
+
+      let body;
+      const method = (req.method || "GET").toUpperCase();
+      if (method !== "GET" && method !== "HEAD") {
+        const chunks = [];
+        for await (const c of req) chunks.push(typeof c === "string" ? Buffer.from(c) : c);
+        if (chunks.length) body = Buffer.concat(chunks);
+      }
+
+      const headers = new Headers();
+      for (const [k, v] of Object.entries(req.headers)) {
+        if (Array.isArray(v)) v.forEach((x) => headers.append(k, x));
+        else if (v != null) headers.set(k, String(v));
+      }
+
+      const request = new Request(url, {
+        method,
+        headers,
+        body,
+        ...(body ? { duplex: "half" } : {}),
+      });
+
+      const response = await handler(request);
+      res.statusCode = response.status;
+      response.headers.forEach((val, key) => res.setHeader(key, val));
+      const buf = Buffer.from(await response.arrayBuffer());
+      res.end(buf);
+    } catch (err) {
+      console.error("withWeb handler error:", err);
+      if (!res.headersSent) {
+        res.statusCode = 500;
+        res.setHeader("content-type", "application/json; charset=utf-8");
+      }
+      res.end(JSON.stringify({ ok: false, error: "Internal Server Error" }));
+    }
+  };
+}
+
 /** CORS / preflight helper. */
 export function preflight() {
   return new Response(null, {

@@ -2,9 +2,9 @@
 // POST /api/save — saves a cotización. If body has no `number`, assigns next folio.
 // REQUIRES vendor authentication (Bearer token from /api/auth/login).
 
-import { db, reserveNextNumber, getCurrentUser, json, preflight } from "./_lib.mjs";
+import { db, reserveNextNumber, getCurrentUser, json, preflight, withWeb } from "./_lib.mjs";
 
-export default async (req) => {
+export default withWeb(async (req) => {
   if (req.method === "OPTIONS") return preflight();
   if (req.method !== "POST") return json({ ok: false, error: "Method not allowed" }, 405);
 
@@ -77,5 +77,5 @@ export default async (req) => {
 
   const savedAt = new Date().toISOString();
   return json({ ok: true, number, savedAt, isNew });
-};
+});
 
