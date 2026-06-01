@@ -792,7 +792,7 @@ body {
     <div class="toolbar">
       <div class="search-wrap">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input class="search-input" id="search" placeholder="Buscar por folio, cliente, RUT, vendedor…" autocomplete="off" />
+        <input class="search-input" id="search" placeholder="Buscar: folio, cliente, RUT, referencia, OT, SKU, N° de parte, vendedor…" autocomplete="off" />
       </div>
       <div class="filter-chips" id="statusFilter">
         <button class="chip active" data-status="">Todas</button>
@@ -901,6 +901,14 @@ body {
         <div class="form-field">
           <label class="form-label">Cargo</label>
           <input class="form-input" id="uRole" placeholder="Ventas Corporativas" />
+          <div class="form-help">Aparece en el PDF (ej. Ventas Corporativas)</div>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Tipo de acceso</label>
+          <select class="form-input" id="uAccessRole">
+            <option value="vendedor">Vendedor — solo crea y ve sus propias cotizaciones</option>
+            <option value="admin">Admin — ve todas y administra usuarios</option>
+          </select>
         </div>
         <div class="form-field">
           <label class="form-label">Teléfono</label>
@@ -1065,15 +1073,19 @@ function applyFilters() {
     if (statusFilter && (i.status || 'borrador') !== statusFilter) return false;
     if (vendorFilter && i.createdBy?.name !== vendorFilter) return false;
     if (searchTerm) {
-      const hay = [
+      // Prefer the server-built search blob (incluye referencia, OT, SKU, N° de parte,
+      // descripción de items, cliente, vendedor). Fallback a campos básicos.
+      const hay = (i.search || [
         String(i.number),
         i.client?.name || '',
         i.client?.rut || '',
         i.client?.contact || '',
         i.client?.email || '',
+        i.referencia || '',
+        i.ot || '',
         i.createdBy?.name || '',
         i.createdBy?.email || '',
-      ].join(' ').toLowerCase();
+      ].join(' ').toLowerCase());
       if (!hay.includes(searchTerm)) return false;
     }
     return true;
@@ -1158,7 +1170,8 @@ function renderDetail(rec) {
         <div class="detail-field"><span class="detail-label">Contacto</span><span class="detail-value">${escapeHtml(c.contact || '—')}</span></div>
         <div class="detail-field"><span class="detail-label">Email</span><span class="detail-value">${escapeHtml(c.email || '—')}</span></div>
         <div class="detail-field"><span class="detail-label">Dirección</span><span class="detail-value">${escapeHtml(c.address || '—')}</span></div>
-        ${c.reference ? `<div class="detail-field span-3"><span class="detail-label">Referencia</span><span class="detail-value">${escapeHtml(c.reference)}</span></div>` : ''}
+        ${c.reference ? `<div class="detail-field"><span class="detail-label">Referencia</span><span class="detail-value">${escapeHtml(c.reference)}</span></div>` : ''}
+        ${rec.ot ? `<div class="detail-field"><span class="detail-label">N° OT</span><span class="detail-value">${escapeHtml(rec.ot)}</span></div>` : ''}
       </div>
     </div>
 
@@ -1167,6 +1180,7 @@ function renderDetail(rec) {
       <table class="items-mini">
         <thead><tr>
           <th>Código</th>
+          <th>N° parte</th>
           <th>Descripción</th>
           <th style="text-align:right;">Cant.</th>
           <th style="text-align:right;">Costo</th>
@@ -1185,6 +1199,7 @@ function renderDetail(rec) {
             const mcls = margenPct > 0 ? 'pos' : (margenPct < 0 ? 'neg' : 'zero');
             return `<tr>
               <td class="code">${escapeHtml(it.code || '—')}</td>
+              <td class="code">${escapeHtml(it.numeroParte || '—')}</td>
               <td>${escapeHtml(it.desc || '')}</td>
               <td class="r">${qty}</td>
               <td class="r">${cost ? fmt(cost) : '—'}</td>
@@ -1306,7 +1321,7 @@ function renderUsers() {
           <div class="u-name">${escapeHtml(u.name || '—')}</div>
           <div class="u-email">${escapeHtml(u.email)}</div>
         </div>
-        <div class="u-role">${escapeHtml(u.role || '—')}</div>
+        <div class="u-role">${escapeHtml(u.role || '—')}<br><span style="font-size:11px;font-weight:700;color:${(u.access_role||'admin')==='admin' ? 'var(--eq-blue)' : 'var(--gray-500)'};">${(u.access_role||'admin')==='admin' ? 'ADMIN' : 'VENDEDOR'}</span></div>
         <div class="u-phone">${escapeHtml(u.phone || '—')}</div>
         <div><span class="u-status ${active ? 'active' : 'inactive'}">${active ? 'Activo' : 'Inactivo'}</span></div>
         <div class="u-actions">
@@ -1332,6 +1347,7 @@ function openUserModal(email) {
     $('uEmail').disabled = true;
     $('uEmailHelp').textContent = 'No se puede cambiar';
     $('uRole').value = u.role || '';
+    $('uAccessRole').value = (u.access_role || 'admin');
     $('uPhone').value = u.phone || '';
     $('uPassword').value = '';
     $('uPwdLabel').textContent = 'Nueva contraseña (opcional)';
@@ -1345,6 +1361,7 @@ function openUserModal(email) {
     $('uEmail').disabled = false;
     $('uEmailHelp').textContent = 'No se puede cambiar después';
     $('uRole').value = 'Ventas Corporativas';
+    $('uAccessRole').value = 'vendedor';
     $('uPhone').value = '';
     $('uPassword').value = '';
     $('uPwdLabel').textContent = 'Contraseña inicial';
@@ -1367,6 +1384,7 @@ async function saveUser() {
     email: $('uEmail').value.trim().toLowerCase(),
     name: $('uName').value.trim(),
     role: $('uRole').value.trim(),
+    access_role: $('uAccessRole').value,
     phone: $('uPhone').value.trim(),
     active: $('uActive').checked,
   };

@@ -1,7 +1,7 @@
 // netlify/functions/get.mjs
 // GET /api/get/:number — returns a single cotización
 
-import { db, json, preflight, withWeb } from "../_lib.mjs";
+import { db, isAdmin, getCurrentUser, json, preflight, withWeb } from "../_lib.mjs";
 
 export default withWeb(async (req) => {
   if (req.method === "OPTIONS") return preflight();
@@ -16,13 +16,26 @@ export default withWeb(async (req) => {
 
   const rows = await db().sql`
     SELECT number, status, client, items, terms, vendor, totals,
-           created_by, last_edited_by, notes,
+           created_by, last_edited_by, notes, ot,
            saved_at, created_at
       FROM cotizaciones WHERE number = ${number}
   `;
   if (!rows.length) return json({ ok: false, error: "Cotización no encontrada" }, 404);
 
   const r = rows[0];
+
+  // Vendor scoping: a 'vendedor' may only view their own cotizaciones.
+  // (Master admin password and 'admin' users see everything.)
+  if (!isAdmin(req)) {
+    const user = await getCurrentUser(req);
+    if (user && (user.access_role || "admin") === "vendedor") {
+      const owner = ((r.created_by && r.created_by.email) || "").toLowerCase();
+      if (owner !== user.email.toLowerCase()) {
+        return json({ ok: false, error: "No autorizado" }, 403);
+      }
+    }
+  }
+
   // Reshape to same JSON the v3 frontend/admin expects
   const cotizacion = {
     number: r.number,
@@ -37,6 +50,7 @@ export default withWeb(async (req) => {
     vendor: r.vendor,
     totals: r.totals,
     notes: r.notes,
+    ot: r.ot || "",
   };
 
   return json({ ok: true, cotizacion });

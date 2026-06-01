@@ -33,18 +33,21 @@ export default withWeb(async (req) => {
   const role = String(body?.role || "").trim();
   const phone = String(body?.phone || "").trim();
   const active = body?.active !== false;
+  // Access role (capability): 'admin' or 'vendedor'. Default 'vendedor' (least privilege).
+  const accessRole = String(body?.access_role || "").trim().toLowerCase() === "admin" ? "admin" : "vendedor";
   const passwordHash = password ? hashPassword(password) : existing.password_hash;
 
   if (!existing) {
     await db().sql`
-      INSERT INTO users (email, name, role, phone, password_hash, active, created_at, updated_at)
-      VALUES (${email}, ${name}, ${role}, ${phone}, ${passwordHash}, ${active}, NOW(), NOW())
+      INSERT INTO users (email, name, role, access_role, phone, password_hash, active, created_at, updated_at)
+      VALUES (${email}, ${name}, ${role}, ${accessRole}, ${phone}, ${passwordHash}, ${active}, NOW(), NOW())
     `;
   } else {
     await db().sql`
       UPDATE users SET
         name = ${name},
         role = ${role},
+        access_role = ${accessRole},
         phone = ${phone},
         password_hash = ${passwordHash},
         active = ${active},
@@ -55,7 +58,7 @@ export default withWeb(async (req) => {
 
   return json({
     ok: true,
-    user: { email, name, role, phone, active },
+    user: { email, name, role, access_role: accessRole, phone, active },
     isNew: !existing,
   });
 });

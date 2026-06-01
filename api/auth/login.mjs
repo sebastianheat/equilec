@@ -15,7 +15,7 @@ export default withWeb(async (req) => {
   if (!email || !password) return json({ ok: false, error: "Email y contraseña requeridos" }, 400);
 
   const rows = await db().sql`
-    SELECT email, name, role, phone, password_hash, active
+    SELECT email, name, role, access_role, phone, password_hash, active
       FROM users WHERE email = ${email}
   `;
   const user = rows[0];
@@ -34,7 +34,7 @@ export default withWeb(async (req) => {
   return json({
     ok: true,
     token,
-    user: { email: user.email, name: user.name, role: user.role, phone: user.phone, active: user.active }
+    user: { email: user.email, name: user.name, role: user.role, access_role: user.access_role || "admin", phone: user.phone, active: user.active }
   });
 });
 

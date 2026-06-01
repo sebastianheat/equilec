@@ -230,7 +230,7 @@ export async function getCurrentUser(req) {
   const v = verifyToken(token);
   if (!v) return null;
   const rows = await db().sql`
-    SELECT email, name, role, phone, active, created_at, updated_at
+    SELECT email, name, role, access_role, phone, active, created_at, updated_at
       FROM users WHERE email = ${v.email}
   `;
   if (!rows.length) return null;

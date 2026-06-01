@@ -9,7 +9,7 @@ export default withWeb(async (req) => {
   if (!isAdmin(req)) return json({ ok: false, error: "No autorizado" }, 401);
 
   const rows = await db().sql`
-    SELECT email, name, role, phone, active, created_at, updated_at
+    SELECT email, name, role, access_role, phone, active, created_at, updated_at
       FROM users
      ORDER BY name ASC
   `;

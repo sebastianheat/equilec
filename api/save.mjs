@@ -47,17 +47,18 @@ export default withWeb(async (req) => {
   const vendor = body.vendor || {};
   const totals = body.totals || null;
   const notes = body.notes || "";
+  const ot = String(body.ot || "").trim();
 
   if (isNew) {
     await db().sql`
       INSERT INTO cotizaciones
-        (number, status, client, items, terms, vendor, totals, created_by, last_edited_by, notes, saved_at, created_at)
+        (number, status, client, items, terms, vendor, totals, created_by, last_edited_by, notes, ot, saved_at, created_at)
       VALUES
         (${number}, ${status}, ${JSON.stringify(body.client)}::jsonb, ${JSON.stringify(body.items)}::jsonb,
          ${JSON.stringify(terms)}::jsonb, ${JSON.stringify(vendor)}::jsonb,
          ${totals ? JSON.stringify(totals) : null}::jsonb,
          ${JSON.stringify(createdBy)}::jsonb, ${JSON.stringify(lastEditedBy)}::jsonb,
-         ${notes}, NOW(), NOW())
+         ${notes}, ${ot}, NOW(), NOW())
     `;
   } else {
     await db().sql`
@@ -70,6 +71,7 @@ export default withWeb(async (req) => {
         totals = ${totals ? JSON.stringify(totals) : null}::jsonb,
         last_edited_by = ${JSON.stringify(lastEditedBy)}::jsonb,
         notes = ${notes},
+        ot = ${ot},
         saved_at = NOW()
       WHERE number = ${number}
     `;
