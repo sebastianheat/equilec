@@ -85,6 +85,9 @@ export default withWeb(async (req) => {
     ghl = await pushCotizacionToGHL({
       number, ot, client: body.client, terms, totals, vendor, createdBy,
     });
+    if (ghl && ghl.ok && ghl.contactId) {
+      try { await db().sql`UPDATE cotizaciones SET ghl_contact_id = ${ghl.contactId} WHERE number = ${number}`; } catch { /* no-fatal */ }
+    }
   }
 
   const savedAt = new Date().toISOString();

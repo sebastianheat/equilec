@@ -202,11 +202,12 @@ async function searchContactByEmail(email) {
  * Adjunta al contacto una nota con el link al PDF alojado de la cotización.
  * Busca el contacto por email. Resiliente: nunca lanza.
  */
-export async function attachPdfNote({ email, number }) {
+export async function attachPdfNote({ contactId, email, number }) {
   try {
     if (!ghlEnabled()) return { ok: false, skipped: "GHL no configurado" };
-    const contactId = await searchContactByEmail(email);
-    if (!contactId) return { ok: false, error: "contacto no encontrado por email" };
+    // Preferimos el contactId guardado; si no, buscamos por email.
+    if (!contactId) contactId = await searchContactByEmail(email);
+    if (!contactId) return { ok: false, error: "contacto no encontrado" };
     const pdfUrl = `https://equilec.vercel.app/api/pdf/${number}`;
     await addNote(contactId, `📎 PDF cotización COT-${number}: ${pdfUrl}`);
     return { ok: true, contactId, pdfUrl };

@@ -28,16 +28,17 @@ export default withWeb(async (req) => {
   const rows = await db().sql`
     UPDATE cotizaciones SET pdf_b64 = ${pdf}
     WHERE number = ${number}
-    RETURNING client ->> 'email' AS email
+    RETURNING client ->> 'email' AS email, ghl_contact_id
   `;
   if (!rows.length) return json({ ok: false, error: "Cotización no encontrada" }, 404);
 
   const email = rows[0].email || "";
+  const contactId = rows[0].ghl_contact_id || null;
   const pdfUrl = `https://equilec.vercel.app/api/pdf/${number}`;
 
   // Adjuntar nota con el link al PDF en GHL (no rompe si falla)
   let ghl = null;
-  if (email) ghl = await attachPdfNote({ email, number });
+  if (contactId || email) ghl = await attachPdfNote({ contactId, email, number });
 
   return json({ ok: true, pdfUrl, ghl });
 });
