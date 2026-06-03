@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EQUILEC · Cotizador 1.0 — Documentación técnica</title>
+<style>
+  :root{
+    --navy:#0B2A4A; --blue:#1763C6; --blue-soft:#E8F1FC; --ink:#1b2733;
+    --gray-700:#3f4b5b; --gray-500:#6b7787; --gray-300:#cbd3dd; --gray-100:#eef2f7;
+    --bg:#f6f8fb; --ok:#0a8f5b; --warn:#b9770a; --line:#e3e9f0;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.55;font-size:15px}
+  .wrap{max-width:880px;margin:0 auto;padding:40px 28px 80px}
+  header.cover{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;
+    border-radius:16px;padding:34px 34px;margin-bottom:28px;box-shadow:0 10px 30px rgba(11,42,74,.18)}
+  header.cover .kicker{font-size:12px;letter-spacing:.18em;text-transform:uppercase;opacity:.8;font-weight:700}
+  header.cover h1{margin:8px 0 4px;font-size:30px;letter-spacing:-.5px}
+  header.cover .sub{font-size:15px;opacity:.92}
+  header.cover .meta{margin-top:16px;font-size:12.5px;opacity:.8;display:flex;gap:18px;flex-wrap:wrap}
+  h2{color:var(--navy);font-size:20px;margin:34px 0 10px;padding-bottom:8px;border-bottom:2px solid var(--gray-100)}
+  h3{color:var(--blue);font-size:15.5px;margin:18px 0 6px}
+  p{margin:8px 0}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0;
+    box-shadow:0 1px 2px rgba(16,24,40,.04)}
+  code{background:var(--gray-100);padding:1.5px 6px;border-radius:5px;font-size:13px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#0c3b6e}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:var(--blue-soft);color:var(--navy);font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:.03em}
+  tr:last-child td{border-bottom:none}
+  ul{margin:8px 0 8px 2px;padding-left:20px}
+  li{margin:4px 0}
+  .pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px}
+  .pill.ok{background:#e3f6ec;color:var(--ok)}
+  .pill.wip{background:#fdf1dd;color:var(--warn)}
+  .pill.blue{background:var(--blue-soft);color:var(--blue)}
+  .flow{background:var(--navy);color:#dce8f7;border-radius:12px;padding:18px 20px;margin:14px 0;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.7;white-space:pre;overflow-x:auto}
+  .note{border-left:4px solid var(--blue);background:var(--blue-soft);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;font-size:13.5px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .muted{color:var(--gray-500);font-size:13px}
+  footer{margin-top:40px;text-align:center;color:var(--gray-500);font-size:12.5px;border-top:1px solid var(--line);padding-top:18px}
+  .toc{columns:2;font-size:13.5px}
+  .toc a{color:var(--gray-700);text-decoration:none}
+  @media(max-width:640px){.grid2,.toc{grid-template-columns:1fr;columns:1}}
+  @media print{body{background:#fff}.wrap{padding:0}header.cover{box-shadow:none}.card{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="cover">
+    <div class="kicker">Documentación técnica · v1.0</div>
+    <h1>EQUILEC — Cotizador Dinámico</h1>
+    <div class="sub">Arquitectura, funcionamiento e integración con Heat Suite (HIT / GoHighLevel)</div>
+    <div class="meta">
+      <span>Preparado para: <strong>TI — Seba Godoy</strong></span>
+      <span>Producción: <strong>https://equilec.vercel.app</strong></span>
+      <span>Por: Heat IA</span>
+    </div>
+  </header>
+
+  <div class="card">
+    <strong>Índice</strong>
+    <div class="toc" style="margin-top:8px">
+      <a href="#resumen">1. Resumen ejecutivo</a><br/>
+      <a href="#arquitectura">2. Arquitectura general</a><br/>
+      <a href="#stack">3. Stack y hosting</a><br/>
+      <a href="#funciona">4. Cómo funciona el cotizador</a><br/>
+      <a href="#datos">5. Modelo de datos</a><br/>
+      <a href="#api">6. API (endpoints)</a><br/>
+      <a href="#hit">7. Integración con HIT</a><br/>
+      <a href="#migracion">8. Migración e historial</a><br/>
+      <a href="#env">9. Variables de entorno</a><br/>
+      <a href="#seguridad">10. Seguridad</a><br/>
+      <a href="#roadmap">11. Próximos pasos</a><br/>
+    </div>
+  </div>
+
+  <h2 id="resumen">1. Resumen ejecutivo</h2>
+  <div class="card">
+    <p>El <strong>Cotizador EQUILEC</strong> es una aplicación web que permite a los vendedores armar cotizaciones
+    (cliente, productos, costos, márgenes, moneda, condiciones) y generar un <strong>PDF</strong> profesional.
+    Cada cotización se guarda en una base de datos propia y, además, se <strong>sincroniza con Heat Suite
+    (HIT / GoHighLevel)</strong> para el seguimiento comercial automatizado.</p>
+    <p>Originalmente vivía en <strong>Netlify</strong>. Se migró a una nueva infraestructura sobre
+    <strong>GitHub + Vercel + Neon (PostgreSQL)</strong>, con su base de datos aislada e independiente,
+    conservando todo el histórico (44 cotizaciones, folios 1501–1545, y los usuarios).</p>
+  </div>
+
+  <h2 id="arquitectura">2. Arquitectura general</h2>
+  <p>Aplicación <em>serverless</em>: un frontend estático + funciones de backend bajo demanda + base de datos
+  Postgres administrada. La cotización completa vive en la base propia; HIT recibe una vista comercial.</p>
+  <div class="flow">┌─────────────────────────────────────────────────────────────┐
+│  NAVEGADOR (vendedor / admin)                               │
+│  index.html  ·  admin.html   (HTML + JS, genera el PDF)     │
+└───────────────┬─────────────────────────────────────────────┘
+                │  HTTPS  (fetch /api/*)
+                ▼
+┌─────────────────────────────────────────────────────────────┐
+│  VERCEL — Funciones serverless  (carpeta /api)              │
+│  auth · save · list · get · users · next-number …          │
+└──────┬───────────────────────────────────┬──────────────────┘
+       │                                   │
+       ▼                                   ▼
+┌──────────────────────┐     ┌──────────────────────────────────┐
+│ NEON — PostgreSQL    │     │ HIT / GoHighLevel  (API v2)       │
+│ equilec-db           │     │ Contacto + Oportunidad + Nota     │
+│ (FUENTE DE VERDAD)   │     │ (vista comercial / seguimiento)   │
+└──────────────────────┘     └──────────────────────────────────┘</div>
+
+  <h2 id="stack">3. Stack y hosting</h2>
+  <table>
+    <thead><tr><th>Capa</th><th>Tecnología</th><th>Dónde</th></tr></thead>
+    <tbody>
+      <tr><td>Código fuente</td><td>Git</td><td>GitHub · <code>sebastianheat/equilec</code></td></tr>
+      <tr><td>Frontend</td><td>HTML + JS (sin framework) + jsPDF</td><td>Estático en Vercel</td></tr>
+      <tr><td>Backend</td><td>Funciones serverless Node.js (Web <code>Request/Response</code>)</td><td>Vercel · carpeta <code>/api</code></td></tr>
+      <tr><td>Base de datos</td><td>PostgreSQL (driver <code>@neondatabase/serverless</code>)</td><td>Neon · proyecto <code>equilec-db</code></td></tr>
+      <tr><td>CRM / automatización</td><td>GoHighLevel API v2</td><td>Heat Suite (sub-cuenta Equilec)</td></tr>
+      <tr><td>Despliegue</td><td>Vercel CLI / Git</td><td>Producción: <code>equilec.vercel.app</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="funciona">4. Cómo funciona el cotizador</h2>
+
+  <h3>Autenticación y roles</h3>
+  <ul>
+    <li><strong>Vendedores</strong> entran al cotizador (<code>index.html</code>) con correo + contraseña.
+        La sesión usa un <strong>token firmado (HMAC)</strong> de 30 días — sin estado en servidor.</li>
+    <li>Cada usuario tiene un <strong>tipo de acceso</strong> (<code>access_role</code>):
+      <ul>
+        <li><span class="pill blue">Admin</span> ve <strong>todas</strong> las cotizaciones y administra usuarios.</li>
+        <li><span class="pill blue">Vendedor</span> crea y ve <strong>solo las suyas</strong>; no administra usuarios.</li>
+      </ul>
+    </li>
+    <li>El <strong>panel admin</strong> (<code>/admin</code>) está protegido por una contraseña maestra
+        (<code>EQUILEC_ADMIN_PASSWORD</code>) e incluye el buscador global y la gestión de usuarios.</li>
+  </ul>
+
+  <h3>Motor de precios (regla de negocio clave)</h3>
+  <div class="note">El vendedor ingresa <strong>costo</strong> y <strong>margen %</strong>; el <strong>precio de venta se
+  calcula solo y queda bloqueado</strong> (no editable). El margen es sobre el precio de venta:
+  <code>precio = costo ÷ (1 − margen%)</code>. Ej.: costo 100 con 20% → 100 / 0,8 = <strong>125</strong>.</div>
+  <ul>
+    <li><strong>Redondeo:</strong> todos los valores se redondean <strong>hacia arriba</strong>, sin decimales
+        (por producto, total e IVA), tanto en pantalla como en el PDF.</li>
+    <li><strong>Moneda:</strong> CLP / USD / EUR, elegible por cotización; aplica a toda la cotización y al PDF.</li>
+    <li><strong>IVA:</strong> 19% incluido siempre (en cualquier moneda). El PDF ya no indica "valores netos / no incluyen IVA".</li>
+  </ul>
+
+  <h3>Productos, buscador y campos</h3>
+  <ul>
+    <li>Cada producto tiene <strong>SKU</strong> y <strong>N° de parte</strong> (interno, p. ej. para Codelco):
+        el N° de parte se ve internamente pero <strong>no aparece en el PDF</strong> del cliente.</li>
+    <li>Campos de cabecera: <strong>Referencia</strong> y <strong>N° OT</strong> (orden de trabajo).</li>
+    <li><strong>Buscador</strong> (panel admin y barra lateral del vendedor): encuentra por cliente, RUT,
+        referencia, <strong>OT</strong>, <strong>SKU</strong>, <strong>N° de parte</strong> y vendedor.</li>
+  </ul>
+
+  <h2 id="datos">5. Modelo de datos (Neon · PostgreSQL)</h2>
+  <table>
+    <thead><tr><th>Tabla</th><th>Contenido</th></tr></thead>
+    <tbody>
+      <tr><td><code>cotizaciones</code></td><td>Una fila por folio. Columnas: <code>number</code> (folio), <code>status</code>,
+        <code>client</code>, <code>items</code>, <code>terms</code>, <code>vendor</code>, <code>totals</code> (JSONB),
+        <code>created_by</code>, <code>ot</code>, fechas. Los productos (SKU, N° parte, costo, margen, precio) viven dentro de <code>items</code>.</td></tr>
+      <tr><td><code>users</code></td><td>Vendedores/admin: email, nombre, cargo (sale en el PDF),
+        <code>access_role</code> (admin/vendedor), teléfono, hash de contraseña (scrypt), activo.</td></tr>
+      <tr><td><code>counters</code></td><td>Correlativo de folios (arranca en 1501). Reserva atómica del siguiente N°.</td></tr>
+    </tbody>
+  </table>
+  <p class="muted">La base es <strong>independiente</strong> de la del cotizador anterior: se copió un snapshot, sin tocar la original.</p>
+
+  <h2 id="api">6. API (endpoints principales)</h2>
+  <table>
+    <thead><tr><th>Método · Ruta</th><th>Función</th><th>Acceso</th></tr></thead>
+    <tbody>
+      <tr><td><code>POST /api/auth/login</code></td><td>Login de vendedor (devuelve token)</td><td>público</td></tr>
+      <tr><td><code>GET /api/auth/me</code></td><td>Usuario autenticado</td><td>token</td></tr>
+      <tr><td><code>POST /api/save</code></td><td>Guardar cotización <em>+ sincronizar a HIT</em></td><td>token vendedor</td></tr>
+      <tr><td><code>GET /api/get/:n</code></td><td>Obtener una cotización (vendedor: solo la suya)</td><td>token / admin</td></tr>
+      <tr><td><code>GET /api/list</code></td><td>Listar (vendedor: solo las suyas; admin: todas) + blob de búsqueda</td><td>token / admin</td></tr>
+      <tr><td><code>GET /api/next-number</code></td><td>Próximo folio</td><td>público</td></tr>
+      <tr><td><code>POST /api/login</code> · <code>/api/users/*</code></td><td>Panel admin: login maestro y CRUD de usuarios</td><td>admin</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="hit">7. Integración con HIT (Heat Suite / GoHighLevel)</h2>
+  <p>La <strong>cotización completa</strong> vive en la base del cotizador. HIT recibe una <strong>vista comercial</strong>
+  para el seguimiento. La sincronización es <strong>de una vía</strong> (cotizador → HIT) y ocurre <strong>al crear</strong>
+  la cotización (no en cada edición, para no duplicar oportunidades).</p>
+
+  <h3>Qué se crea en HIT</h3>
+  <table>
+    <thead><tr><th>En HIT</th><th>Detalle</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Contacto</strong></td><td>El cliente. <em>Upsert</em> por email/teléfono (no duplica).</td></tr>
+      <tr><td><strong>Oportunidad</strong></td><td>Pipeline <strong>Oportunidades de Venta</strong> → etapa <strong>Solicita Cotización</strong>.
+        Incluye <strong>valor</strong>, <strong>dueño</strong> = el vendedor (mapeo correo → usuario de HIT), nombre <code>COT-1546 · Cliente</code> y <strong>tags</strong>.</td></tr>
+      <tr><td><strong>Nota</strong></td><td>En la ficha del contacto: folio, OT, referencia, moneda, total y un <strong>link</strong> que abre la cotización completa.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Tags que deja el cotizador (los usan los Workflows)</h3>
+  <ul>
+    <li><code>cotizador</code> — origen.</li>
+    <li><code>moneda-clp</code> / <code>moneda-usd</code> / <code>moneda-eur</code>.</li>
+    <li><code>cotizacion-alto-valor</code> — se aplica cuando el total supera el umbral:
+        <strong>CLP ≥ 2.000.000</strong>, <strong>USD ≥ 2.000</strong>, <strong>EUR ≥ 2.000</strong>.
+        El Workflow de seguimiento prioritario filtra por este tag (sin hacer cálculos de moneda).</li>
+  </ul>
+
+  <h3>Conexión técnica</h3>
+  <div class="flow">Vendedor guarda cotización
+        │
+        ▼
+[ /api/save ]  ──►  Neon (equilec-db)        ← fuente de verdad
+        │
+        └──►  API de HIT  (services.leadconnectorhq.com, v2)
+                 módulo  api/_ghl.mjs
+                 ├─ upsert Contacto
+                 ├─ crea Oportunidad (pipeline · etapa · valor · dueño · tags)
+                 └─ agrega Nota con link</div>
+  <ul>
+    <li><strong>Autenticación:</strong> un <em>Private Integration Token</em> de la sub-cuenta de HIT,
+        guardado como variable de entorno en Vercel (<code>GHL_API_TOKEN</code>, <code>GHL_LOCATION_ID</code>) —
+        <strong>no</strong> está en el código ni en GitHub.</li>
+    <li><strong>Resiliente:</strong> si HIT estuviera caído, la cotización <strong>igual se guarda</strong>; solo no sincroniza esa vez.</li>
+    <li><strong>Automatizaciones (24 h WhatsApp / 48 h correo + mover etapa)</strong> se construyen como
+        <strong>Workflows dentro de HIT</strong>, usando los tags anteriores. El cotizador solo deja los datos listos.</li>
+  </ul>
+
+  <h2 id="migracion">8. Migración e historial</h2>
+  <ul>
+    <li>Origen: proyecto en <strong>Netlify</strong> (<code>cotizadorequilecbyheat</code>) con Netlify Functions + Netlify DB (Neon).</li>
+    <li>Se portaron las funciones a <strong>Vercel</strong>, se migró el driver de base de datos y se creó una base
+        <strong>Neon nueva y aislada</strong> con un snapshot de los datos (44 cotizaciones + 5 usuarios + correlativo).</li>
+    <li>La base original quedó <strong>intacta</strong> (solo lectura durante la copia).</li>
+  </ul>
+
+  <h2 id="env">9. Variables de entorno (en Vercel · sin valores)</h2>
+  <table>
+    <thead><tr><th>Variable</th><th>Para qué</th></tr></thead>
+    <tbody>
+      <tr><td><code>DATABASE_URL</code></td><td>Conexión a Neon (PostgreSQL).</td></tr>
+      <tr><td><code>EQUILEC_ADMIN_PASSWORD</code></td><td>Contraseña maestra del panel admin.</td></tr>
+      <tr><td><code>EQUILEC_AUTH_SECRET</code></td><td>Secreto para firmar los tokens de sesión (HMAC).</td></tr>
+      <tr><td><code>GHL_API_TOKEN</code></td><td>Private Integration Token de HIT.</td></tr>
+      <tr><td><code>GHL_LOCATION_ID</code></td><td>ID de la sub-cuenta de HIT (Equilec).</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="seguridad">10. Seguridad</h2>
+  <ul>
+    <li>Contraseñas de usuario con <strong>hash scrypt</strong> (salt por usuario); nunca se guardan en texto plano.</li>
+    <li>Sesiones con <strong>token HMAC</strong> firmado; los secretos viven solo en variables de entorno.</li>
+    <li>El token de HIT es de tipo <em>Private Integration</em> (revocable) y no se versiona en el repositorio.</li>
+    <li>Aislamiento por rol en el backend: un vendedor no puede leer cotizaciones de otros vía API.</li>
+  </ul>
+
+  <h2 id="roadmap">11. Próximos pasos</h2>
+  <table>
+    <thead><tr><th>Ítem</th><th>Estado</th></tr></thead>
+    <tbody>
+      <tr><td>Cotizador (precio auto, moneda, redondeo, PDF, roles, buscador, OT, N° parte)</td><td><span class="pill ok">En producción</span></td></tr>
+      <tr><td>Cotización → Contacto + Oportunidad en HIT</td><td><span class="pill ok">En producción</span></td></tr>
+      <tr><td>Workflows 24 h / 48 h (WhatsApp + correo + mover etapa) y etapa "Derivación humano cotización"</td><td><span class="pill wip">A configurar en HIT (con Katy)</span></td></tr>
+      <tr><td>Registro de proveedores con autocompletado desde Heat Suite</td><td><span class="pill wip">Por definir fuente</span></td></tr>
+      <tr><td>Reordenamiento de pipelines (Marketing+Ventas / Postventa)</td><td><span class="pill wip">Reunión Katy</span></td></tr>
+    </tbody>
+  </table>
+
+  <footer>
+    EQUILEC · Cotizador 1.0 — Documentación técnica · Heat IA<br/>
+    Producción: https://equilec.vercel.app · Repositorio: github.com/sebastianheat/equilec
+  </footer>
+
+</div>
+</body>
+</html>
