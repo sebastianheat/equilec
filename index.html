@@ -1106,7 +1106,7 @@ body {
           </div>
           <div class="field">
             <label class="field-label">Teléfono</label>
-            <input class="field-input" id="clientPhone" type="tel" placeholder="+56 9 1234 5678 (opcional)" />
+            <input class="field-input" id="clientPhone" type="tel" placeholder="+56 9 1234 5678 (opcional)" onblur="if(this.value.trim())this.value=normalizeChilePhone(this.value)" />
           </div>
           <div class="field">
             <label class="field-label">Referencia</label>
@@ -1354,6 +1354,19 @@ function validateRequired() {
   if (!rut) { toast('Falta el RUT del cliente'); $('clientRut').focus(); return false; }
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('Falta un email válido del cliente'); $('clientEmail').focus(); return false; }
   return true;
+}
+
+/** Normaliza un teléfono chileno a formato E.164 (+569…). Vacío si no hay dígitos. */
+function normalizeChilePhone(raw) {
+  if (!raw) return '';
+  const s = String(raw).trim();
+  const digits = s.replace(/\D/g, '');
+  if (digits.length < 8) return s.trim(); // deja lo que haya (campo opcional); el backend valida
+  if (s.startsWith('+')) return '+' + digits;
+  if (digits.startsWith('56')) return '+' + digits;
+  if (digits.length === 9 && digits[0] === '9') return '+56' + digits;
+  if (digits.length === 8) return '+569' + digits; // móvil sin el 9 inicial
+  return '+' + digits;
 }
 
 /** Refresca el badge de estado (Borrador gris / Generado verde). */
@@ -2023,7 +2036,7 @@ function collectData() {
       address: $('clientAddress').value.trim(),
       contact: $('clientContact').value.trim(),
       email: $('clientEmail').value.trim(),
-      phone: $('clientPhone').value.trim(),
+      phone: normalizeChilePhone($('clientPhone').value),
       reference: $('clientReference').value.trim()
     },
     terms: {

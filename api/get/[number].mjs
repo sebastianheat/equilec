@@ -16,7 +16,7 @@ export default withWeb(async (req) => {
 
   const rows = await db().sql`
     SELECT number, status, client, items, terms, vendor, totals,
-           created_by, last_edited_by, notes, ot,
+           created_by, last_edited_by, notes, ot, ghl_status,
            saved_at, created_at
       FROM cotizaciones WHERE number = ${number}
   `;
@@ -51,6 +51,7 @@ export default withWeb(async (req) => {
     totals: r.totals,
     notes: r.notes,
     ot: r.ot || "",
+    ghlStatus: r.ghl_status || null,
   };
 
   return json({ ok: true, cotizacion });

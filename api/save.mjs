@@ -80,15 +80,20 @@ export default withWeb(async (req) => {
 
   // Integración Heat Suite (GHL): empuja la cotización a CRM solo al CREARLA
   // (evita oportunidades duplicadas en re-guardados/ediciones). Nunca rompe el guardado.
-  let ghl = null;
-  if (isNew) {
-    ghl = await pushCotizacionToGHL({
-      number, ot, client: body.client, terms, totals, vendor, createdBy,
-    });
-    if (ghl && ghl.ok && ghl.contactId) {
-      try { await db().sql`UPDATE cotizaciones SET ghl_contact_id = ${ghl.contactId} WHERE number = ${number}`; } catch { /* no-fatal */ }
-    }
-  }
+  // Sincroniza a GHL en CADA guardado: crea la oportunidad del cliente (o la
+  // actualiza si ya existe / si es una edición). Resiliente: nunca rompe el guardado.
+  const ghl = await pushCotizacionToGHL({
+    number, ot, isNew, client: body.client, terms, totals, vendor, createdBy,
+  });
+  try {
+    const status = ghl?.ok ? `ok:${ghl.oppMode || ""}` : `error:${(ghl && ghl.error) || "desconocido"}`;
+    await db().sql`
+      UPDATE cotizaciones SET
+        ghl_status = ${status.slice(0, 200)},
+        ghl_synced_at = NOW(),
+        ghl_contact_id = COALESCE(${ghl?.contactId || null}, ghl_contact_id)
+      WHERE number = ${number}`;
+  } catch { /* no-fatal */ }
 
   const savedAt = new Date().toISOString();
   return json({ ok: true, number, savedAt, isNew, ghl });

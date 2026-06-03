@@ -60,13 +60,18 @@ export function isHighValue(total, currency) {
 
 function sanitizePhone(p) {
   if (!p) return null;
-  const cleaned = String(p).replace(/[^\d+]/g, "");
-  const digits = cleaned.replace(/\D/g, "");
-  return digits.length >= 7 ? cleaned : null; // descarta basura (ej. un nombre en el campo "Contacto")
+  const s = String(p).trim();
+  const digits = s.replace(/\D/g, "");
+  if (digits.length < 8) return null;                 // descarta basura (ej. un nombre)
+  if (s.startsWith("+")) return "+" + digits;
+  if (digits.startsWith("56")) return "+" + digits;   // Chile con prefijo país
+  if (digits.length === 9 && digits[0] === "9") return "+56" + digits; // móvil chileno
+  return "+" + digits;
 }
 
-async function upsertContact({ name, email, phone }) {
+async function upsertContact({ name, companyName, email, phone }) {
   const body = { locationId: loc(), name: name || "Sin nombre" };
+  if (companyName) body.companyName = companyName; // razón social va a "Company"
   if (email) body.email = email;
   const ph = sanitizePhone(phone);
   if (ph) body.phone = ph;
@@ -130,9 +135,13 @@ export async function pushCotizacionToGHL(cot) {
   try {
     if (!ghlEnabled()) return { ok: false, skipped: "GHL no configurado" };
     const client = cot.client || {};
-    // Contacto: el teléfono real va aparte; NO usamos el nombre del "Contacto".
+    // GHL maneja el contacto como PERSONA ligada a una empresa:
+    //  - name = la persona (campo "Contacto"); si no hay, cae a la razón social.
+    //  - companyName = la razón social (campo "Company").
+    const personName = (client.contact && client.contact.trim()) || client.name || "Sin nombre";
     const contactId = await upsertContact({
-      name: client.name,
+      name: personName,
+      companyName: client.name,
       email: client.email,
       phone: client.phone,
     });
@@ -163,7 +172,7 @@ export async function pushCotizacionToGHL(cot) {
     // Historial: cada cotización suma una nota en el contacto.
     const link = `https://equilec.vercel.app/?load=${cot.number}`;
     const note = [
-      `Cotización COT-${cot.number}`,
+      `Cotización COT-${cot.number}${cot.isNew === false ? " (actualizada)" : ""}`,
       client.rut ? `RUT: ${client.rut}` : null,
       cot.ot ? `OT: ${cot.ot}` : null,
       client.reference ? `Referencia: ${client.reference}` : null,

@@ -851,6 +851,7 @@ body {
         <div class="modal-cot" id="dCot">—</div>
         <div class="modal-client" id="dClient">—</div>
         <span class="status-badge" id="dStatus">—</span>
+        <span class="status-badge" id="dGhl" title="Estado de sincronización con Heat Suite (GHL)">GHL: —</span>
       </div>
       <button class="modal-close" onclick="closeDetail()" aria-label="Cerrar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -867,6 +868,10 @@ body {
         Eliminar
       </button>
       <div style="display: flex; gap: 8px;">
+        <button class="btn btn-secondary" id="dResyncBtn" onclick="resyncGhl()" title="Reintentar el envío a Heat Suite (GHL)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Reintentar GHL
+        </button>
         <a class="btn btn-secondary" href="#" id="dOpenLink">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           Abrir en cotizador
@@ -1146,6 +1151,16 @@ function renderDetail(rec) {
   $('dStatus').className = 'status-badge status-' + status;
   $('dStatus').textContent = statusLabel;
 
+  // Estado de sincronización con GHL (Heat Suite)
+  const gs = rec.ghlStatus || '';
+  const gEl = $('dGhl');
+  if (gEl) {
+    gEl.title = 'Heat Suite (GHL): ' + (gs || 'sin enviar');
+    if (gs.indexOf('ok') === 0) { gEl.textContent = 'GHL ✓'; gEl.style.cssText = 'background:#E3F6EC;color:#0A8F5B;border-color:#AEE6C8'; }
+    else if (gs.indexOf('error') === 0) { gEl.textContent = 'GHL ✕'; gEl.style.cssText = 'background:#FDECEC;color:#C0392B;border-color:#F5C6C6'; }
+    else { gEl.textContent = 'GHL —'; gEl.style.cssText = 'background:#eee;color:#666;border-color:#ddd'; }
+  }
+
   const c = rec.client || {};
   const t = rec.terms || {};
   const v = rec.vendor || {};
@@ -1266,6 +1281,26 @@ function closeDetail() {
   $('detailModal').classList.remove('open');
   document.body.style.overflow = '';
   CURRENT_DETAIL = null;
+}
+
+async function resyncGhl() {
+  if (!CURRENT_DETAIL) return;
+  const btn = $('dResyncBtn');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+  try {
+    const r = await fetch('/api/ghl-resync/' + CURRENT_DETAIL.number, {
+      method: 'POST',
+      headers: { 'authorization': 'Bearer ' + TOKEN },
+    });
+    const d = await r.json();
+    if (d.ok) toast('Sincronizado con Heat Suite ✓');
+    else toast('GHL: ' + ((d.ghl && d.ghl.error) || d.error || 'no se pudo sincronizar'));
+    await openDetail(CURRENT_DETAIL.number); // refresca el detalle (y el badge)
+  } catch (e) {
+    toast('Error: ' + (e.message || ''));
+  } finally {
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+  }
 }
 
 async function deleteCurrent() {

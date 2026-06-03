@@ -35,6 +35,7 @@ function shape(r) {
     ot: r.ot || "",
     referencia: (r.client && r.client.reference) || "",
     itemCount: Number(r.item_count || 0),
+    ghlStatus: r.ghl_status || null,
     search: buildSearchBlob(r),
   };
 }
@@ -55,13 +56,13 @@ export default withWeb(async (req) => {
 
   const rows = scopeEmail
     ? await db().sql`
-        SELECT number, status, client, items, vendor, totals, created_by, created_at, saved_at, ot,
+        SELECT number, status, client, items, vendor, totals, created_by, created_at, saved_at, ot, ghl_status,
                jsonb_array_length(items) AS item_count
           FROM cotizaciones
          WHERE created_by ->> 'email' = ${scopeEmail}
          ORDER BY number DESC`
     : await db().sql`
-        SELECT number, status, client, items, vendor, totals, created_by, created_at, saved_at, ot,
+        SELECT number, status, client, items, vendor, totals, created_by, created_at, saved_at, ot, ghl_status,
                jsonb_array_length(items) AS item_count
           FROM cotizaciones
          ORDER BY number DESC`;
