@@ -58,12 +58,35 @@ export function isHighValue(total, currency) {
   return t >= 2000000; // CLP
 }
 
+function sanitizePhone(p) {
+  if (!p) return null;
+  const cleaned = String(p).replace(/[^\d+]/g, "");
+  const digits = cleaned.replace(/\D/g, "");
+  return digits.length >= 7 ? cleaned : null; // descarta basura (ej. un nombre en el campo "Contacto")
+}
+
 async function upsertContact({ name, email, phone }) {
   const body = { locationId: loc(), name: name || "Sin nombre" };
   if (email) body.email = email;
-  if (phone) body.phone = phone;
+  const ph = sanitizePhone(phone);
+  if (ph) body.phone = ph;
   const d = await call("/contacts/upsert", "POST", body);
   return (d.contact && d.contact.id) || d.id || null;
+}
+
+// Find-opportunity (Opción A): una sola oportunidad por cliente.
+async function findOpenOpportunity(contactId) {
+  try {
+    const d = await call(
+      `/opportunities/search?location_id=${encodeURIComponent(loc())}&contact_id=${encodeURIComponent(contactId)}&pipeline_id=${GHL_PIPELINE_ID}`,
+      "GET"
+    );
+    const list = d.opportunities || [];
+    const found = list.find((o) => o.status === "open") || list[0];
+    return found ? found.id : null;
+  } catch {
+    return null;
+  }
 }
 
 async function createOpportunity({ contactId, name, monetaryValue, assignedTo }) {
@@ -79,6 +102,14 @@ async function createOpportunity({ contactId, name, monetaryValue, assignedTo })
   if (assignedTo) body.assignedTo = assignedTo;
   const d = await call("/opportunities/", "POST", body);
   return (d.opportunity && d.opportunity.id) || d.id || null;
+}
+
+async function updateOpportunity(oppId, { name, monetaryValue, assignedTo }) {
+  const body = { name, monetaryValue: Math.round(Number(monetaryValue) || 0) };
+  if (assignedTo) body.assignedTo = assignedTo;
+  // No tocamos la etapa: respetamos dónde la haya movido el equipo de ventas.
+  await call(`/opportunities/${oppId}`, "PUT", body);
+  return oppId;
 }
 
 async function addContactTags(contactId, tags) {
@@ -99,12 +130,13 @@ export async function pushCotizacionToGHL(cot) {
   try {
     if (!ghlEnabled()) return { ok: false, skipped: "GHL no configurado" };
     const client = cot.client || {};
+    // Contacto: el teléfono real va aparte; NO usamos el nombre del "Contacto".
     const contactId = await upsertContact({
       name: client.name,
       email: client.email,
-      phone: client.phone || client.contact,
+      phone: client.phone,
     });
-    if (!contactId) return { ok: false, error: "sin contactId" };
+    if (!contactId) return { ok: false, error: "sin contactId (cliente sin email/teléfono válido)" };
 
     const total = (cot.totals && cot.totals.total) || 0;
     const currency = (cot.terms && cot.terms.currency) || "CLP";
@@ -112,20 +144,27 @@ export async function pushCotizacionToGHL(cot) {
     const ownerEmail = ((cot.createdBy && cot.createdBy.email) || (cot.vendor && cot.vendor.email) || "").toLowerCase();
     const assignedTo = VENDOR_USER_MAP[ownerEmail] || undefined;
 
-    const oppId = await createOpportunity({
-      contactId,
-      name: `COT-${cot.number} · ${client.name || ""}`.trim(),
-      monetaryValue: total,
-      assignedTo,
-    });
+    // Opción A: una oportunidad por cliente. Si ya existe, se actualiza; si no, se crea.
+    const oppName = `${client.name || "Cliente"} · COT-${cot.number}`;
+    let oppId = await findOpenOpportunity(contactId);
+    let oppMode;
+    if (oppId) {
+      await updateOpportunity(oppId, { name: oppName, monetaryValue: total, assignedTo });
+      oppMode = "updated";
+    } else {
+      oppId = await createOpportunity({ contactId, name: oppName, monetaryValue: total, assignedTo });
+      oppMode = "created";
+    }
 
     const tags = ["cotizador", `moneda-${currency.toLowerCase()}`];
     if (hv) tags.push("cotizacion-alto-valor");
     await addContactTags(contactId, tags);
 
+    // Historial: cada cotización suma una nota en el contacto.
     const link = `https://equilec.vercel.app/?load=${cot.number}`;
     const note = [
       `Cotización COT-${cot.number}`,
+      client.rut ? `RUT: ${client.rut}` : null,
       cot.ot ? `OT: ${cot.ot}` : null,
       client.reference ? `Referencia: ${client.reference}` : null,
       `Moneda: ${currency}`,
@@ -135,7 +174,7 @@ export async function pushCotizacionToGHL(cot) {
     ].filter(Boolean).join("\n");
     await addNote(contactId, note);
 
-    return { ok: true, contactId, oppId, highValue: hv };
+    return { ok: true, contactId, oppId, oppMode, highValue: hv };
   } catch (e) {
     return { ok: false, error: String(e.message || e) };
   }

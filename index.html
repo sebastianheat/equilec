@@ -223,6 +223,11 @@ body {
   border-radius: 999px;
   border: 1px solid #C6DDF2;
 }
+.status-badge.generado {
+  background: #E3F6EC;
+  color: #0A8F5B;
+  border-color: #AEE6C8;
+}
 
 .topbar-actions { display: flex; gap: 8px; }
 .btn {
@@ -1055,7 +1060,7 @@ body {
           <div class="cot-label">Fecha</div>
           <div class="cot-date" id="cotDate">—</div>
         </div>
-        <span class="status-badge">Borrador</span>
+        <span class="status-badge" id="statusBadge">Borrador</span>
       </div>
       <div class="topbar-actions">
         <button class="btn btn-secondary" onclick="saveCotizacion()" title="Guardar en historial">
@@ -1084,7 +1089,7 @@ body {
             <input class="field-input" id="clientName" placeholder="Razón social del cliente" />
           </div>
           <div class="field">
-            <label class="field-label">RUT</label>
+            <label class="field-label">RUT *</label>
             <input class="field-input" id="clientRut" placeholder="76.580.030-2" />
           </div>
           <div class="field">
@@ -1096,8 +1101,12 @@ body {
             <input class="field-input" id="clientContact" placeholder="Nombre del contacto" />
           </div>
           <div class="field">
-            <label class="field-label">Email</label>
+            <label class="field-label">Email *</label>
             <input class="field-input" id="clientEmail" type="email" placeholder="cliente@ejemplo.cl" />
+          </div>
+          <div class="field">
+            <label class="field-label">Teléfono</label>
+            <input class="field-input" id="clientPhone" type="tel" placeholder="+56 9 1234 5678 (opcional)" />
           </div>
           <div class="field">
             <label class="field-label">Referencia</label>
@@ -1332,8 +1341,28 @@ let state = {
   selectedBrand: '',
   onlyPriced: false,
   search: '',
-  currency: 'CLP'
+  currency: 'CLP',
+  status: 'borrador'
 };
+
+/** Valida los campos obligatorios (cliente, RUT, email). Devuelve true si está OK. */
+function validateRequired() {
+  const name = $('clientName').value.trim();
+  const rut = $('clientRut').value.trim();
+  const email = $('clientEmail').value.trim();
+  if (!name) { toast('Falta el nombre del cliente'); $('clientName').focus(); return false; }
+  if (!rut) { toast('Falta el RUT del cliente'); $('clientRut').focus(); return false; }
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('Falta un email válido del cliente'); $('clientEmail').focus(); return false; }
+  return true;
+}
+
+/** Refresca el badge de estado (Borrador gris / Generado verde). */
+function updateStatusBadge() {
+  const el = $('statusBadge');
+  if (!el) return;
+  if (state.status === 'generado') { el.textContent = 'Generado'; el.classList.add('generado'); }
+  else { el.textContent = 'Borrador'; el.classList.remove('generado'); }
+}
 
 const DEFAULT_MARGEN = 30;
 const CURRENCIES = {
@@ -1839,9 +1868,11 @@ async function newCotizacion(skipConfirm) {
   $('cotDate').textContent = fmtDate(new Date());
 
   // Clear fields
-  ['clientName','clientRut','clientAddress','clientContact','clientEmail','clientReference','clientOt'].forEach(id => $(id).value = '');
+  ['clientName','clientRut','clientAddress','clientContact','clientEmail','clientPhone','clientReference','clientOt'].forEach(id => $(id).value = '');
   $('termsObservations').value = 'Material ofertado cumple 100% con lo solicitado.';
 
+  state.status = 'borrador';
+  updateStatusBadge();
   state.items = [];
   addItem();
   renderHistory();
@@ -1849,13 +1880,8 @@ async function newCotizacion(skipConfirm) {
 
 async function saveCotizacion(opts) {
   opts = opts || {};
+  if (!validateRequired()) return null;
   const data = collectData();
-
-  if (!data.client.name) {
-    toast('Falta el nombre del cliente');
-    $('clientName').focus();
-    return null;
-  }
   if (state.items.every(i => !i.desc)) {
     toast('Agrega al menos un producto');
     return null;
@@ -1869,7 +1895,7 @@ async function saveCotizacion(opts) {
   const payload = {
     ...data,
     number: state.cotNumber > 0 ? state.cotNumber : undefined,
-    status: 'borrador',
+    status: state.status || 'borrador',
     totals: { subtotal, iva, total },
   };
 
@@ -1885,6 +1911,7 @@ async function saveCotizacion(opts) {
     state.cotNumber = d.number;
     state.savedAt = d.savedAt;
     $('cotNumber').textContent = String(d.number);
+    updateStatusBadge();
 
     if (!opts.silent) toast(`COT-${d.number} guardada`);
     await loadHistory();
@@ -1913,8 +1940,11 @@ async function loadCotizacion(number) {
     $('clientAddress').value = rec.client?.address || '';
     $('clientContact').value = rec.client?.contact || '';
     $('clientEmail').value = rec.client?.email || '';
+    $('clientPhone').value = rec.client?.phone || '';
     $('clientReference').value = rec.client?.reference || '';
     $('clientOt').value = rec.ot || '';
+    state.status = rec.status || 'borrador';
+    updateStatusBadge();
 
     $('termsPayment').value = rec.terms?.payment || '';
     $('termsValidity').value = rec.terms?.validity || '';
@@ -1993,6 +2023,7 @@ function collectData() {
       address: $('clientAddress').value.trim(),
       contact: $('clientContact').value.trim(),
       email: $('clientEmail').value.trim(),
+      phone: $('clientPhone').value.trim(),
       reference: $('clientReference').value.trim()
     },
     terms: {
@@ -2025,14 +2056,18 @@ function collectData() {
    PDF GENERATION
    ========================================================================= */
 async function generatePDF() {
+  if (!validateRequired()) return;
   const data = collectData();
-  if (!data.client.name) { toast('Falta el nombre del cliente'); $('clientName').focus(); return; }
   if (data.items.length === 0) { toast('Agrega al menos un producto'); return; }
+
+  // Generar PDF marca la cotización como "Generado"
+  state.status = 'generado';
 
   // Save first to get a definitive folio number from the server
   toast('Guardando…');
   const assignedNumber = await saveCotizacion({ silent: true });
-  if (!assignedNumber) return; // saveCotizacion already showed error
+  if (!assignedNumber) { state.status = 'borrador'; return; } // si falló, no quedó generada
+  updateStatusBadge();
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
