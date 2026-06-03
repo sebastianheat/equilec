@@ -2452,6 +2452,18 @@ async function generatePDF() {
   doc.save(filename);
 
   toast(`PDF generado: ${filename}`);
+
+  // Aloja el PDF (URL estable) y adjunta el link en la nota del contacto en GHL.
+  try {
+    const dataUri = doc.output('datauristring');
+    if (state.cotNumber > 0 && dataUri) {
+      authFetch('/api/pdf-upload', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ number: state.cotNumber, pdf: dataUri }),
+      }).catch(() => {});
+    }
+  } catch (e) { console.error('pdf-upload:', e); }
 }
 
 function drawField(doc, C, label, value, x, y, maxW, bold) {

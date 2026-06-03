@@ -179,3 +179,38 @@ export async function pushCotizacionToGHL(cot) {
     return { ok: false, error: String(e.message || e) };
   }
 }
+
+/** Busca un contacto por email exacto. Devuelve su id o null. */
+async function searchContactByEmail(email) {
+  if (!email) return null;
+  try {
+    const d = await call("/contacts/search", "POST", {
+      locationId: loc(),
+      query: email,
+      pageLimit: 5,
+    });
+    const list = d.contacts || [];
+    const lc = email.toLowerCase();
+    const hit = list.find((c) => (c.email || "").toLowerCase() === lc) || list[0];
+    return hit ? hit.id : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Adjunta al contacto una nota con el link al PDF alojado de la cotización.
+ * Busca el contacto por email. Resiliente: nunca lanza.
+ */
+export async function attachPdfNote({ email, number }) {
+  try {
+    if (!ghlEnabled()) return { ok: false, skipped: "GHL no configurado" };
+    const contactId = await searchContactByEmail(email);
+    if (!contactId) return { ok: false, error: "contacto no encontrado por email" };
+    const pdfUrl = `https://equilec.vercel.app/api/pdf/${number}`;
+    await addNote(contactId, `📎 PDF cotización COT-${number}: ${pdfUrl}`);
+    return { ok: true, contactId, pdfUrl };
+  } catch (e) {
+    return { ok: false, error: String(e.message || e) };
+  }
+}
