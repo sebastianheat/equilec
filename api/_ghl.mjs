@@ -229,7 +229,7 @@ export async function pushCotizacionToGHL(cot) {
       rut ? `RUT: ${rut}` : null,
       isCorp && aribaId ? `ID Ariba: ${aribaId}` : null,
       cot.ot ? `OT: ${cot.ot}` : null,
-      client.reference ? `Referencia: ${client.reference}` : null,
+      (!isCorp && client.reference) ? `Referencia: ${client.reference}` : null,
       `Moneda: ${currency}`,
       `Total: ${total}`,
       hv ? "⚑ Alto valor — seguimiento prioritario" : null,

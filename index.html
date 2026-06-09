@@ -228,6 +228,14 @@ body {
   color: #0A8F5B;
   border-color: #AEE6C8;
 }
+.type-toggle { display: inline-flex; gap: 0; border: 1px solid var(--gray-300); border-radius: 8px; overflow: hidden; }
+.type-toggle .type-btn {
+  appearance: none; border: none; background: #fff; color: var(--gray-600);
+  font-size: 12px; font-weight: 600; padding: 7px 13px; cursor: pointer; transition: all .12s;
+}
+.type-toggle .type-btn + .type-btn { border-left: 1px solid var(--gray-300); }
+.type-toggle .type-btn:hover { background: var(--gray-50); }
+.type-toggle .type-btn.active { background: var(--eq-blue); color: #fff; }
 
 .topbar-actions { display: flex; gap: 8px; }
 .btn {
@@ -1061,6 +1069,10 @@ body {
           <div class="cot-date" id="cotDate">—</div>
         </div>
         <span class="status-badge" id="statusBadge">Borrador</span>
+        <div class="type-toggle" id="typeToggle" title="Tipo de cotización (no aparece en el PDF)">
+          <button type="button" class="type-btn active" data-tipo="normal" onclick="applyClientType('normal')">Cotización Normal</button>
+          <button type="button" class="type-btn" data-tipo="corporativo" onclick="applyClientType('corporativo')">Corporativa</button>
+        </div>
       </div>
       <div class="topbar-actions">
         <button class="btn btn-secondary" onclick="saveCotizacion()" title="Guardar en historial">
@@ -1085,23 +1097,12 @@ body {
       <div class="card-body">
         <div class="client-grid">
           <div class="field">
-            <label class="field-label">Tipo de cliente *</label>
-            <select class="field-input" id="clientType" onchange="applyClientType(this.value)">
-              <option value="normal">Cliente Normal (WhatsApp / Instagram / Facebook)</option>
-              <option value="corporativo">Cliente Corporativo (Ariba)</option>
-            </select>
-          </div>
-          <div class="field">
             <label class="field-label">Facturado a *</label>
             <input class="field-input" id="clientName" placeholder="Razón social del cliente" />
           </div>
           <div class="field">
             <label class="field-label">RUT *</label>
             <input class="field-input" id="clientRut" placeholder="76.580.030-2" />
-          </div>
-          <div class="field" id="aribaField" style="display:none;">
-            <label class="field-label">ID requerimiento Ariba *</label>
-            <input class="field-input" id="clientAriba" placeholder="N° de requerimiento en Ariba" />
           </div>
           <div class="field">
             <label class="field-label">Dirección</label>
@@ -1120,7 +1121,7 @@ body {
             <input class="field-input" id="clientPhone" type="tel" placeholder="+56 9 1234 5678 (opcional)" onblur="if(this.value.trim())this.value=normalizeChilePhone(this.value)" />
           </div>
           <div class="field">
-            <label class="field-label">Referencia</label>
+            <label class="field-label" id="refLabel">Referencia</label>
             <input class="field-input" id="clientReference" placeholder="Ej: 7.5HP 4P WEG" />
           </div>
           <div class="field">
@@ -1357,14 +1358,20 @@ let state = {
   tipoCliente: 'normal'
 };
 
-/** Ajusta el formulario según el tipo de cliente (Normal / Corporativo). */
+/** Ajusta el formulario según el tipo de cotización (Normal / Corporativa).
+    En Corporativa el campo "Referencia" actúa como ID de requerimiento Ariba. */
 function applyClientType(tipo) {
   state.tipoCliente = (tipo === 'corporativo') ? 'corporativo' : 'normal';
   const corp = state.tipoCliente === 'corporativo';
-  const aribaField = $('aribaField');
-  if (aribaField) aribaField.style.display = corp ? '' : 'none';
+  document.querySelectorAll('#typeToggle .type-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tipo === state.tipoCliente);
+  });
   const emailLabel = $('emailLabel');
   if (emailLabel) emailLabel.textContent = corp ? 'Email' : 'Email *'; // en corporativo, opcional
+  const refLabel = $('refLabel');
+  if (refLabel) refLabel.textContent = corp ? 'Referencia / ID Ariba *' : 'Referencia';
+  const ref = $('clientReference');
+  if (ref) ref.placeholder = corp ? 'N° de requerimiento Ariba' : 'Ej: 7.5HP 4P WEG';
 }
 
 /** Valida los campos obligatorios (cliente, RUT, email). Devuelve true si está OK. */
@@ -1375,8 +1382,8 @@ function validateRequired() {
   if (!name) { toast('Falta el nombre del cliente'); $('clientName').focus(); return false; }
   if (!rut) { toast('Falta el RUT del cliente'); $('clientRut').focus(); return false; }
   if (state.tipoCliente === 'corporativo') {
-    const ariba = $('clientAriba').value.trim();
-    if (!ariba) { toast('Falta el ID de requerimiento Ariba'); $('clientAriba').focus(); return false; }
+    const ref = $('clientReference').value.trim();
+    if (!ref) { toast('Falta la Referencia / ID Ariba'); $('clientReference').focus(); return false; }
   } else {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('Falta un email válido del cliente'); $('clientEmail').focus(); return false; }
   }
@@ -1908,11 +1915,10 @@ async function newCotizacion(skipConfirm) {
   $('cotDate').textContent = fmtDate(new Date());
 
   // Clear fields
-  ['clientName','clientRut','clientAddress','clientContact','clientEmail','clientPhone','clientReference','clientOt','clientAriba'].forEach(id => $(id).value = '');
+  ['clientName','clientRut','clientAddress','clientContact','clientEmail','clientPhone','clientReference','clientOt'].forEach(id => $(id).value = '');
   $('termsObservations').value = 'Material ofertado cumple 100% con lo solicitado.';
 
   state.tipoCliente = 'normal';
-  if ($('clientType')) $('clientType').value = 'normal';
   applyClientType('normal');
   state.status = 'borrador';
   updateStatusBadge();
@@ -1987,8 +1993,6 @@ async function loadCotizacion(number) {
     $('clientReference').value = rec.client?.reference || '';
     $('clientOt').value = rec.ot || '';
     state.tipoCliente = rec.tipoCliente || 'normal';
-    if ($('clientType')) $('clientType').value = state.tipoCliente;
-    $('clientAriba').value = rec.aribaId || '';
     applyClientType(state.tipoCliente);
     state.status = rec.status || 'borrador';
     updateStatusBadge();
@@ -2065,7 +2069,7 @@ function collectData() {
   return {
     ot: $('clientOt').value.trim(),
     tipoCliente: state.tipoCliente || 'normal',
-    aribaId: $('clientAriba').value.trim(),
+    aribaId: (state.tipoCliente === 'corporativo') ? $('clientReference').value.trim() : '',
     client: {
       name: $('clientName').value.trim(),
       rut: $('clientRut').value.trim(),
