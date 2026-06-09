@@ -16,7 +16,7 @@ export default withWeb(async (req) => {
   if (!Number.isFinite(number) || number <= 0) return json({ ok: false, error: "Folio inválido" }, 400);
 
   const rows = await db().sql`
-    SELECT number, ot, client, terms, vendor, totals, created_by
+    SELECT number, ot, client, terms, vendor, totals, created_by, tipo_cliente, ariba_id, ghl_opp_id
       FROM cotizaciones WHERE number = ${number}
   `;
   if (!rows.length) return json({ ok: false, error: "Cotización no encontrada" }, 404);
@@ -26,6 +26,9 @@ export default withWeb(async (req) => {
     number: r.number,
     ot: r.ot,
     isNew: false,
+    tipoCliente: r.tipo_cliente,
+    aribaId: r.ariba_id,
+    ghlOppId: r.ghl_opp_id,
     client: r.client,
     terms: r.terms,
     totals: r.totals,
@@ -39,7 +42,8 @@ export default withWeb(async (req) => {
       UPDATE cotizaciones SET
         ghl_status = ${status.slice(0, 200)},
         ghl_synced_at = NOW(),
-        ghl_contact_id = COALESCE(${ghl?.contactId || null}, ghl_contact_id)
+        ghl_contact_id = COALESCE(${ghl?.contactId || null}, ghl_contact_id),
+        ghl_opp_id = COALESCE(${ghl?.oppId || null}, ghl_opp_id)
       WHERE number = ${number}`;
   } catch { /* no-fatal */ }
 

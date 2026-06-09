@@ -6,9 +6,14 @@
 const BASE = "https://services.leadconnectorhq.com";
 const VERSION = "2021-07-28";
 
-// Pipeline + etapa destino (Oportunidades de Venta → ⚠️ Solicita Cotización)
+// Pipeline de ventas
 export const GHL_PIPELINE_ID = "CbFA7voSrC9WTGOty5fR";
-export const GHL_STAGE_SOLICITA = "9b8221ab-2bb4-4ef5-b329-4261d2bae5ea";
+// Etapas destino según tipo de cliente
+export const GHL_STAGE_NORMAL = "aa34bceb-327d-46c1-9c57-d516951ffdae"; // ⚡️ Cotización Enviada
+export const GHL_STAGE_CORP   = "e3f1100f-f2ba-4ac1-a547-9fabeb23b1d5"; // Cotización Corporativa
+// Campos personalizados de contacto en Heat
+const RUT_FIELD_ID   = "Gh19ABEYCNjcGLSjuwXK"; // RUT (sin puntos y con guión)
+const ARIBA_FIELD_ID = "aRfULuXeedVyRTENqYoF"; // ID Ariba
 
 // Mapa correo del vendedor (cotizador) → user id en GHL (para asignar dueño)
 export const VENDOR_USER_MAP = {
@@ -69,14 +74,38 @@ function sanitizePhone(p) {
   return "+" + digits;
 }
 
-async function upsertContact({ name, companyName, email, phone }) {
+// Email "placeholder" para clientes corporativos (sin correo): derivado del RUT,
+// así Heat deduplica por RUT (mismo RUT → mismo contacto).
+function rutToEmail(rut) {
+  const clean = String(rut || "").replace(/[^0-9kK-]/g, "").toLowerCase();
+  return clean ? `${clean}@corp.equilec.cl` : null;
+}
+
+async function upsertContact({ name, companyName, email, phone, customFields }) {
   const body = { locationId: loc(), name: name || "Sin nombre" };
   if (companyName) body.companyName = companyName; // razón social va a "Company"
   if (email) body.email = email;
   const ph = sanitizePhone(phone);
   if (ph) body.phone = ph;
+  if (customFields && customFields.length) body.customFields = customFields;
   const d = await call("/contacts/upsert", "POST", body);
   return (d.contact && d.contact.id) || d.id || null;
+}
+
+// Match dinámico correo del ejecutivo → user id de Heat (con caché y respaldo).
+let _userCache = null;
+async function findHeatUserId(email) {
+  if (!email) return undefined;
+  const lc = email.toLowerCase();
+  if (!_userCache) {
+    _userCache = {};
+    for (const [k, v] of Object.entries(VENDOR_USER_MAP)) _userCache[k.toLowerCase()] = v;
+    try {
+      const d = await call(`/users/?locationId=${encodeURIComponent(loc())}`, "GET");
+      for (const u of (d.users || [])) if (u.email) _userCache[u.email.toLowerCase()] = u.id;
+    } catch { /* usa respaldo */ }
+  }
+  return _userCache[lc] || undefined;
 }
 
 // Find-opportunity (Opción A): una sola oportunidad por cliente.
@@ -94,12 +123,12 @@ async function findOpenOpportunity(contactId) {
   }
 }
 
-async function createOpportunity({ contactId, name, monetaryValue, assignedTo }) {
+async function createOpportunity({ contactId, name, monetaryValue, assignedTo, pipelineStageId }) {
   const body = {
     pipelineId: GHL_PIPELINE_ID,
     locationId: loc(),
     name,
-    pipelineStageId: GHL_STAGE_SOLICITA,
+    pipelineStageId: pipelineStageId || GHL_STAGE_NORMAL,
     status: "open",
     contactId,
     monetaryValue: Math.round(Number(monetaryValue) || 0),
@@ -135,37 +164,60 @@ export async function pushCotizacionToGHL(cot) {
   try {
     if (!ghlEnabled()) return { ok: false, skipped: "GHL no configurado" };
     const client = cot.client || {};
-    // GHL maneja el contacto como PERSONA ligada a una empresa:
-    //  - name = la persona (campo "Contacto"); si no hay, cae a la razón social.
-    //  - companyName = la razón social (campo "Company").
+    const isCorp = cot.tipoCliente === "corporativo";
+    const rut = (client.rut || "").trim();
+    const aribaId = (cot.aribaId || "").trim();
+
+    // Email: Normal usa el real; Corporativo usa un placeholder derivado del RUT
+    // (sin correo/teléfono reales), lo que además deduplica por RUT.
+    let email = (client.email || "").trim();
+    if (!email && isCorp) email = rutToEmail(rut) || "";
+
+    // Campos personalizados: RUT siempre; ID Ariba si es corporativo.
+    const customFields = [];
+    if (rut) customFields.push({ id: RUT_FIELD_ID, field_value: rut });
+    if (isCorp && aribaId) customFields.push({ id: ARIBA_FIELD_ID, field_value: aribaId });
+
+    // GHL maneja el contacto como PERSONA ligada a una empresa.
     const personName = (client.contact && client.contact.trim()) || client.name || "Sin nombre";
     const contactId = await upsertContact({
       name: personName,
       companyName: client.name,
-      email: client.email,
+      email,
       phone: client.phone,
+      customFields,
     });
-    if (!contactId) return { ok: false, error: "sin contactId (cliente sin email/teléfono válido)" };
+    if (!contactId) return { ok: false, error: "sin contactId (sin email/teléfono ni RUT para placeholder)" };
 
     const total = (cot.totals && cot.totals.total) || 0;
     const currency = (cot.terms && cot.terms.currency) || "CLP";
     const hv = isHighValue(total, currency);
     const ownerEmail = ((cot.createdBy && cot.createdBy.email) || (cot.vendor && cot.vendor.email) || "").toLowerCase();
-    const assignedTo = VENDOR_USER_MAP[ownerEmail] || undefined;
+    const assignedTo = await findHeatUserId(ownerEmail);
 
-    // Opción A: una oportunidad por cliente. Si ya existe, se actualiza; si no, se crea.
-    const oppName = `${client.name || "Cliente"} · COT-${cot.number}`;
-    let oppId = await findOpenOpportunity(contactId);
+    const stage = isCorp ? GHL_STAGE_CORP : GHL_STAGE_NORMAL;
+    const oppName = isCorp
+      ? `${client.name || "Cliente"} · Ariba ${aribaId || "—"} · COT-${cot.number}`
+      : `${client.name || "Cliente"} · COT-${cot.number}`;
+
+    let oppId = cot.ghlOppId || null; // oportunidad ya asociada a ESTE folio (edición)
     let oppMode;
     if (oppId) {
+      // Edición de un folio ya sincronizado → actualiza su propia oportunidad.
       await updateOpportunity(oppId, { name: oppName, monetaryValue: total, assignedTo });
       oppMode = "updated";
-    } else {
-      oppId = await createOpportunity({ contactId, name: oppName, monetaryValue: total, assignedTo });
+    } else if (isCorp) {
+      // Corporativo: crea una oportunidad NUEVA por cada requerimiento.
+      oppId = await createOpportunity({ contactId, name: oppName, monetaryValue: total, assignedTo, pipelineStageId: stage });
       oppMode = "created";
+    } else {
+      // Normal: una oportunidad por cliente (Opción A) → actualiza si existe.
+      oppId = await findOpenOpportunity(contactId);
+      if (oppId) { await updateOpportunity(oppId, { name: oppName, monetaryValue: total, assignedTo }); oppMode = "updated-cliente"; }
+      else { oppId = await createOpportunity({ contactId, name: oppName, monetaryValue: total, assignedTo, pipelineStageId: stage }); oppMode = "created"; }
     }
 
-    const tags = ["cotizador", `moneda-${currency.toLowerCase()}`];
+    const tags = ["cotizador", `moneda-${currency.toLowerCase()}`, isCorp ? "tipo-corporativo" : "tipo-normal"];
     if (hv) tags.push("cotizacion-alto-valor");
     await addContactTags(contactId, tags);
 
@@ -173,7 +225,9 @@ export async function pushCotizacionToGHL(cot) {
     const link = `https://equilec.vercel.app/?load=${cot.number}`;
     const note = [
       `Cotización COT-${cot.number}${cot.isNew === false ? " (actualizada)" : ""}`,
-      client.rut ? `RUT: ${client.rut}` : null,
+      `Tipo: ${isCorp ? "Corporativo" : "Normal"}`,
+      rut ? `RUT: ${rut}` : null,
+      isCorp && aribaId ? `ID Ariba: ${aribaId}` : null,
       cot.ot ? `OT: ${cot.ot}` : null,
       client.reference ? `Referencia: ${client.reference}` : null,
       `Moneda: ${currency}`,
@@ -183,7 +237,7 @@ export async function pushCotizacionToGHL(cot) {
     ].filter(Boolean).join("\n");
     await addNote(contactId, note);
 
-    return { ok: true, contactId, oppId, oppMode, highValue: hv };
+    return { ok: true, contactId, oppId, oppMode, tipo: isCorp ? "corporativo" : "normal", highValue: hv };
   } catch (e) {
     return { ok: false, error: String(e.message || e) };
   }

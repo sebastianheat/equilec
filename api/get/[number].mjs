@@ -16,7 +16,7 @@ export default withWeb(async (req) => {
 
   const rows = await db().sql`
     SELECT number, status, client, items, terms, vendor, totals,
-           created_by, last_edited_by, notes, ot, ghl_status,
+           created_by, last_edited_by, notes, ot, ghl_status, tipo_cliente, ariba_id,
            saved_at, created_at
       FROM cotizaciones WHERE number = ${number}
   `;
@@ -52,6 +52,8 @@ export default withWeb(async (req) => {
     notes: r.notes,
     ot: r.ot || "",
     ghlStatus: r.ghl_status || null,
+    tipoCliente: r.tipo_cliente || "normal",
+    aribaId: r.ariba_id || "",
   };
 
   return json({ ok: true, cotizacion });

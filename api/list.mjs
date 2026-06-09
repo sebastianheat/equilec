@@ -14,7 +14,7 @@ function buildSearchBlob(r) {
   const v = r.vendor || {};
   const cb = r.created_by || {};
   const parts = [
-    r.number, c.name, c.rut, c.reference, r.ot, v.name, cb.name, cb.email,
+    r.number, c.name, c.rut, c.reference, r.ot, r.ariba_id, v.name, cb.name, cb.email,
   ];
   for (const it of (Array.isArray(r.items) ? r.items : [])) {
     parts.push(it.code, it.numeroParte, it.desc);
@@ -34,6 +34,8 @@ function shape(r) {
     totals: r.totals || null,
     ot: r.ot || "",
     referencia: (r.client && r.client.reference) || "",
+    tipoCliente: r.tipo_cliente || "normal",
+    aribaId: r.ariba_id || "",
     itemCount: Number(r.item_count || 0),
     ghlStatus: r.ghl_status || null,
     search: buildSearchBlob(r),
@@ -56,13 +58,13 @@ export default withWeb(async (req) => {
 
   const rows = scopeEmail
     ? await db().sql`
-        SELECT number, status, client, items, vendor, totals, created_by, created_at, saved_at, ot, ghl_status,
+        SELECT number, status, client, items, vendor, totals, created_by, created_at, saved_at, ot, ghl_status, tipo_cliente, ariba_id,
                jsonb_array_length(items) AS item_count
           FROM cotizaciones
          WHERE created_by ->> 'email' = ${scopeEmail}
          ORDER BY number DESC`
     : await db().sql`
-        SELECT number, status, client, items, vendor, totals, created_by, created_at, saved_at, ot, ghl_status,
+        SELECT number, status, client, items, vendor, totals, created_by, created_at, saved_at, ot, ghl_status, tipo_cliente, ariba_id,
                jsonb_array_length(items) AS item_count
           FROM cotizaciones
          ORDER BY number DESC`;

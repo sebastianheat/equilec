@@ -28,7 +28,7 @@ export default withWeb(async (req) => {
   let existing = null;
   if (Number.isFinite(number) && number > 0) {
     const rows = await db().sql`
-      SELECT number, status, created_by, created_at
+      SELECT number, status, created_by, created_at, ghl_opp_id
         FROM cotizaciones WHERE number = ${number}
     `;
     existing = rows[0] || null;
@@ -49,17 +49,19 @@ export default withWeb(async (req) => {
   const totals = body.totals || null;
   const notes = body.notes || "";
   const ot = String(body.ot || "").trim();
+  const tipoCliente = body.tipoCliente === "corporativo" ? "corporativo" : "normal";
+  const aribaId = String(body.aribaId || "").trim();
 
   if (isNew) {
     await db().sql`
       INSERT INTO cotizaciones
-        (number, status, client, items, terms, vendor, totals, created_by, last_edited_by, notes, ot, saved_at, created_at)
+        (number, status, client, items, terms, vendor, totals, created_by, last_edited_by, notes, ot, tipo_cliente, ariba_id, saved_at, created_at)
       VALUES
         (${number}, ${status}, ${JSON.stringify(body.client)}::jsonb, ${JSON.stringify(body.items)}::jsonb,
          ${JSON.stringify(terms)}::jsonb, ${JSON.stringify(vendor)}::jsonb,
          ${totals ? JSON.stringify(totals) : null}::jsonb,
          ${JSON.stringify(createdBy)}::jsonb, ${JSON.stringify(lastEditedBy)}::jsonb,
-         ${notes}, ${ot}, NOW(), NOW())
+         ${notes}, ${ot}, ${tipoCliente}, ${aribaId}, NOW(), NOW())
     `;
   } else {
     await db().sql`
@@ -73,17 +75,20 @@ export default withWeb(async (req) => {
         last_edited_by = ${JSON.stringify(lastEditedBy)}::jsonb,
         notes = ${notes},
         ot = ${ot},
+        tipo_cliente = ${tipoCliente},
+        ariba_id = ${aribaId},
         saved_at = NOW()
       WHERE number = ${number}
     `;
   }
 
-  // Integración Heat Suite (GHL): empuja la cotización a CRM solo al CREARLA
-  // (evita oportunidades duplicadas en re-guardados/ediciones). Nunca rompe el guardado.
-  // Sincroniza a GHL en CADA guardado: crea la oportunidad del cliente (o la
-  // actualiza si ya existe / si es una edición). Resiliente: nunca rompe el guardado.
+  // Sincroniza a Heat (GHL) en CADA guardado: Normal actualiza la oportunidad del
+  // cliente; Corporativo crea una nueva; las ediciones actualizan la del folio.
+  // Resiliente: nunca rompe el guardado.
   const ghl = await pushCotizacionToGHL({
-    number, ot, isNew, client: body.client, terms, totals, vendor, createdBy,
+    number, ot, isNew, tipoCliente, aribaId,
+    ghlOppId: existing?.ghl_opp_id || null,
+    client: body.client, terms, totals, vendor, createdBy,
   });
   try {
     const status = ghl?.ok ? `ok:${ghl.oppMode || ""}` : `error:${(ghl && ghl.error) || "desconocido"}`;
@@ -91,7 +96,8 @@ export default withWeb(async (req) => {
       UPDATE cotizaciones SET
         ghl_status = ${status.slice(0, 200)},
         ghl_synced_at = NOW(),
-        ghl_contact_id = COALESCE(${ghl?.contactId || null}, ghl_contact_id)
+        ghl_contact_id = COALESCE(${ghl?.contactId || null}, ghl_contact_id),
+        ghl_opp_id = COALESCE(${ghl?.oppId || null}, ghl_opp_id)
       WHERE number = ${number}`;
   } catch { /* no-fatal */ }
 
