@@ -223,6 +223,15 @@ export async function pushCotizacionToGHL(cot) {
 
     // Historial: cada cotización suma una nota en el contacto.
     const link = `https://equilec.vercel.app/?load=${cot.number}`;
+    // Comentarios internos por ítem → quedan registrados en el CRM (no van al cliente).
+    const internalNotes = (Array.isArray(cot.items) ? cot.items : [])
+      .filter((it) => String(it.comentarioInterno || "").trim() || String(it.numeroParte || "").trim())
+      .map((it) => {
+        const ref = String(it.code || it.numeroParte || it.desc || "").slice(0, 40);
+        const np = String(it.numeroParte || "").trim();
+        const c = String(it.comentarioInterno || "").trim();
+        return `• ${ref}${np ? ` [N° parte: ${np}]` : ""}${c ? `: ${c}` : ""}`;
+      });
     const note = [
       `Cotización COT-${cot.number}${cot.isNew === false ? " (actualizada)" : ""}`,
       `Tipo: ${isCorp ? "Corporativo" : "Normal"}`,
@@ -233,6 +242,7 @@ export async function pushCotizacionToGHL(cot) {
       `Moneda: ${currency}`,
       `Total: ${total}`,
       hv ? "⚑ Alto valor — seguimiento prioritario" : null,
+      internalNotes.length ? `Notas internas:\n${internalNotes.join("\n")}` : null,
       `Ver cotización: ${link}`,
     ].filter(Boolean).join("\n");
     await addNote(contactId, note);

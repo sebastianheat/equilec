@@ -237,7 +237,12 @@ body {
 .type-toggle .type-btn:hover { background: var(--gray-50); }
 .type-toggle .type-btn.active { background: var(--eq-blue); color: #fff; }
 
-.topbar-actions { display: flex; gap: 8px; }
+.topbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pdf-internal { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--gray-600); cursor: pointer; user-select: none; white-space: nowrap; padding: 0 2px; }
+.pdf-internal input { accent-color: var(--eq-blue); cursor: pointer; width: 15px; height: 15px; }
+.pdf-internal.on { color: #B91C1C; font-weight: 600; }
+#pdfBtn.internal { background: #B91C1C; }
+#pdfBtn.internal:hover { background: #991B1B; }
 .btn {
   border: 0;
   border-radius: var(--radius);
@@ -329,6 +334,33 @@ body {
 .client-grid .field:nth-child(5),
 .client-grid .field:nth-child(6) { grid-column: span 1; }
 
+/* Client autocomplete (recent clients) */
+.client-suggest {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  margin-top: 4px;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  max-height: 264px;
+  overflow-y: auto;
+  display: none;
+}
+.client-suggest.open { display: block; }
+.client-suggest .cs-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--gray-100);
+}
+.client-suggest .cs-item:last-child { border-bottom: 0; }
+.client-suggest .cs-item:hover { background: var(--eq-blue-soft); }
+.client-suggest .cs-name { font-weight: 600; font-size: 13px; color: var(--eq-navy); line-height: 1.3; }
+.client-suggest .cs-meta { font-size: 11.5px; color: var(--gray-500); margin-top: 1px; }
+
 /* Items section */
 .items-toolbar {
   display: flex;
@@ -389,6 +421,9 @@ body {
 .items-table textarea { resize: vertical; min-height: 36px; line-height: 1.45; }
 .items-table .col-code { width: 110px; }
 .items-table .col-parte { width: 110px; }
+.items-table .col-comentario { width: 150px; }
+.items-hint { font-size: 11.5px; color: var(--gray-500); padding: 10px 4px 0; line-height: 1.4; }
+.items-hint strong { color: var(--gray-700); font-weight: 600; }
 .items-table .col-qty { width: 64px; }
 .items-table .col-price { text-align: right; padding-right: 12px; font-weight: 600; color: var(--eq-navy); }
 .items-table .col-cost { width: 110px; }
@@ -1079,9 +1114,13 @@ body {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
           Guardar
         </button>
-        <button class="btn btn-primary" onclick="generatePDF()" title="Generar PDF">
+        <label class="pdf-internal" id="pdfInternalWrap" title="Incluye N° de parte y comentarios internos. NO enviar al cliente.">
+          <input type="checkbox" id="pdfInternal" onchange="updatePdfMode()" />
+          <span>Incluir comentarios internos</span>
+        </label>
+        <button class="btn btn-primary" id="pdfBtn" onclick="generatePDF()" title="PDF para el cliente">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-          Generar PDF
+          <span id="pdfBtnLabel">Generar PDF (cliente)</span>
         </button>
       </div>
     </div>
@@ -1096,9 +1135,10 @@ body {
       </div>
       <div class="card-body">
         <div class="client-grid">
-          <div class="field">
+          <div class="field" style="position:relative;">
             <label class="field-label">Facturado a *</label>
-            <input class="field-input" id="clientName" placeholder="Razón social del cliente" />
+            <input class="field-input" id="clientName" placeholder="Razón social (o busca un cliente reciente)" autocomplete="off" oninput="onClientNameInput()" onfocus="onClientNameInput()" />
+            <div class="client-suggest" id="clientSuggest" role="listbox"></div>
           </div>
           <div class="field">
             <label class="field-label">RUT *</label>
@@ -1165,6 +1205,7 @@ body {
               <tr>
                 <th class="col-code">Código (SKU)</th>
                 <th class="col-parte">N° parte</th>
+                <th class="col-comentario">Comentario interno</th>
                 <th>Descripción</th>
                 <th class="col-qty" style="text-align: right;">Cant.</th>
                 <th class="col-cost" style="text-align: right;">Costo unit.</th>
@@ -1179,6 +1220,7 @@ body {
             </tbody>
           </table>
         </div>
+        <div class="items-hint">🔒 <strong>N° de parte</strong> y <strong>Comentario interno</strong> son de uso interno: no aparecen en el PDF ni en la cotización que recibe el cliente.</div>
       </div>
     </section>
 
@@ -1641,11 +1683,12 @@ async function init() {
    ITEMS
    ========================================================================= */
 function addItem(prefill) {
-  const item = prefill || { id: uid(), code: '', numeroParte: '', desc: '', qty: 1, cost: 0, margen: DEFAULT_MARGEN };
+  const item = prefill || { id: uid(), code: '', numeroParte: '', comentarioInterno: '', desc: '', qty: 1, cost: 0, margen: DEFAULT_MARGEN };
   if (!prefill) item.id = uid();
   // Backwards compat / normalization
   if (item.cost == null) item.cost = 0;
   if (item.numeroParte == null) item.numeroParte = '';
+  if (item.comentarioInterno == null) item.comentarioInterno = '';
   if (item.margen == null || item.margen === '') item.margen = deriveMargen(item);
   // Sale price is always derived from cost + margin (no longer editable)
   item.price = calcPrice(item);
@@ -1662,7 +1705,7 @@ function renderItems() {
   const tbody = $('itemsBody');
   tbody.innerHTML = '';
   if (state.items.length === 0) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="9">Sin productos. Agrega desde el catálogo o crea una línea manual.</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="10">Sin productos. Agrega desde el catálogo o crea una línea manual.</td></tr>';
     recalcTotals();
     return;
   }
@@ -1671,7 +1714,8 @@ function renderItems() {
     tr.dataset.id = it.id;
     tr.innerHTML = `
       <td class="col-code"><input class="code-input" data-field="code" value="${escapeAttr(it.code)}" placeholder="—" /></td>
-      <td class="col-parte"><input class="code-input" data-field="numeroParte" value="${escapeAttr(it.numeroParte)}" placeholder="interno" title="N° de parte (interno · no aparece en el PDF del cliente)" /></td>
+      <td class="col-parte"><input class="code-input" data-field="numeroParte" value="${escapeAttr(it.numeroParte)}" placeholder="opcional" title="N° de parte (uso interno · no aparece en el PDF del cliente)" /></td>
+      <td class="col-comentario"><input class="code-input" data-field="comentarioInterno" value="${escapeAttr(it.comentarioInterno)}" placeholder="nota interna" title="Comentario interno (uso interno · no aparece en el PDF del cliente)" /></td>
       <td><textarea data-field="desc" rows="1" placeholder="Descripción del producto">${escapeHtml(it.desc)}</textarea></td>
       <td class="col-qty"><input class="right" data-field="qty" type="number" min="1" value="${it.qty || 1}" /></td>
       <td class="col-cost"><input class="right" data-field="cost" type="number" min="0" step="1" value="${it.cost || 0}" /></td>
@@ -1870,7 +1914,7 @@ function addFromCatalog(cod) {
   if (!p) return;
 
   // Catalog "precio" is taken as the cost base; sale price is auto from cost + default margin.
-  const mk = () => { const it = { code: p.cod, numeroParte: '', desc: p.desc, qty: 1, cost: p.precio || 0, margen: DEFAULT_MARGEN }; it.price = calcPrice(it); return it; };
+  const mk = () => { const it = { code: p.cod, numeroParte: '', comentarioInterno: '', desc: p.desc, qty: 1, cost: p.precio || 0, margen: DEFAULT_MARGEN }; it.price = calcPrice(it); return it; };
   // If the only item is an empty starter row, replace it
   if (state.items.length === 1 && !state.items[0].code && !state.items[0].desc && !state.items[0].cost) {
     state.items[0] = { id: state.items[0].id, ...mk() };
@@ -2014,6 +2058,7 @@ async function loadCotizacion(number) {
     state.items = (rec.items || []).map(i => {
       const it = { ...i, id: uid() };
       if (it.numeroParte == null) it.numeroParte = '';
+      if (it.comentarioInterno == null) it.comentarioInterno = '';
       if (it.margen == null || it.margen === '') it.margen = deriveMargen(it);
       it.price = calcPrice(it);
       return it;
@@ -2065,6 +2110,62 @@ function renderHistory() {
   }).join('');
 }
 
+/* =========================================================================
+   CLIENTE — autocompletar desde clientes ya cotizados (HISTORY_CACHE)
+   ========================================================================= */
+// Lista deduplicada de clientes ya cotizados (por RUT, o nombre si no hay RUT),
+// en orden de más reciente primero (HISTORY_CACHE ya viene por folio DESC).
+function getRecentClients() {
+  const seen = new Set();
+  const out = [];
+  for (const h of (HISTORY_CACHE || [])) {
+    const c = h.client || {};
+    if (!c.name && !c.rut) continue;
+    const key = (c.rut || c.name || '').trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(c);
+  }
+  return out;
+}
+function onClientNameInput() {
+  const box = $('clientSuggest');
+  if (!box) return;
+  const q = ($('clientName').value || '').trim().toLowerCase();
+  let list = getRecentClients();
+  if (q) list = list.filter(c => ((c.name || '') + ' ' + (c.rut || '')).toLowerCase().includes(q));
+  list = list.slice(0, 8);
+  box._list = list;
+  if (list.length === 0) { box.classList.remove('open'); box.innerHTML = ''; return; }
+  box.innerHTML = list.map((c, i) => `
+    <div class="cs-item" onmousedown="pickClient(${i})">
+      <div class="cs-name">${escapeHtml(c.name || '—')}</div>
+      <div class="cs-meta">${escapeHtml([c.rut, c.contact, c.email].filter(Boolean).join(' · ') || 'Sin datos')}</div>
+    </div>`).join('');
+  box.classList.add('open');
+}
+function pickClient(idx) {
+  const box = $('clientSuggest');
+  const c = ((box && box._list) || [])[idx];
+  if (!c) return;
+  $('clientName').value = c.name || '';
+  $('clientRut').value = c.rut || '';
+  $('clientAddress').value = c.address || '';
+  $('clientContact').value = c.contact || '';
+  $('clientEmail').value = c.email || '';
+  $('clientPhone').value = c.phone || '';
+  $('clientReference').value = c.reference || '';
+  box.classList.remove('open');
+  box.innerHTML = '';
+}
+// Cerrar el desplegable al hacer click fuera del campo/sugerencias.
+document.addEventListener('click', (e) => {
+  const box = $('clientSuggest');
+  if (box && box.classList.contains('open') && !e.target.closest('#clientName') && !e.target.closest('#clientSuggest')) {
+    box.classList.remove('open');
+  }
+});
+
 function collectData() {
   return {
     ot: $('clientOt').value.trim(),
@@ -2096,6 +2197,7 @@ function collectData() {
     items: state.items.filter(i => i.desc || i.code).map(i => ({
       code: i.code,
       numeroParte: i.numeroParte || '',
+      comentarioInterno: i.comentarioInterno || '',
       desc: i.desc,
       qty: i.qty || 0,
       cost: i.cost || 0,
@@ -2108,10 +2210,22 @@ function collectData() {
 /* =========================================================================
    PDF GENERATION
    ========================================================================= */
+function updatePdfMode() {
+  const on = !!($('pdfInternal') && $('pdfInternal').checked);
+  const btn = $('pdfBtn'), lbl = $('pdfBtnLabel'), wrap = $('pdfInternalWrap');
+  if (lbl) lbl.textContent = on ? 'Generar PDF INTERNO' : 'Generar PDF (cliente)';
+  if (btn) { btn.classList.toggle('internal', on); btn.title = on ? 'COPIA INTERNA con comentarios — NO enviar al cliente' : 'PDF para el cliente'; }
+  if (wrap) wrap.classList.toggle('on', on);
+}
+
 async function generatePDF() {
   if (!validateRequired()) return;
   const data = collectData();
   if (data.items.length === 0) { toast('Agrega al menos un producto'); return; }
+
+  // ¿Copia interna (incluye N° de parte y comentarios internos)?
+  const internal = !!($('pdfInternal') && $('pdfInternal').checked);
+  if (internal && !confirm('COPIA INTERNA\n\nEste PDF incluye el N° de parte y los comentarios internos, y NO debe enviarse al cliente.\n\n¿Generar la copia interna?')) return;
 
   // Generar PDF marca la cotización como "Generado"
   state.status = 'generado';
@@ -2188,6 +2302,22 @@ async function generatePDF() {
   doc.setTextColor(...C.gray600);
   doc.text(fmtDate(new Date()), rightX, M + 64, { align: 'right' });
 
+  // Marca de "copia interna" (solo versión interna)
+  if (internal) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(185, 28, 28);
+    doc.text('COPIA INTERNA - NO ENVIAR AL CLIENTE', rightX, M + 78, { align: 'right' });
+    try {
+      doc.setGState(new doc.GState({ opacity: 0.08 }));
+      doc.setTextColor(185, 28, 28);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(72);
+      doc.text('USO INTERNO', W / 2, H / 2, { align: 'center', angle: 32 });
+      doc.setGState(new doc.GState({ opacity: 1 }));
+    } catch (e) {}
+  }
+
   // Company info under logo
   doc.setFontSize(8.5);
   doc.setTextColor(...C.gray700);
@@ -2226,17 +2356,17 @@ async function generatePDF() {
 
   y += 38;
 
-  // ITEMS TABLE
+  // ITEMS TABLE — la copia interna agrega N° de parte y comentario interno
+  const headRow = internal
+    ? ['CÓDIGO', 'N° PARTE', 'COMENT. INTERNO', 'DESCRIPCIÓN', 'CANT.', 'P. UNITARIO', 'TOTAL']
+    : ['CÓDIGO', 'DESCRIPCIÓN', 'CANT.', 'P. UNITARIO', 'TOTAL'];
+  const bodyRows = data.items.map(i => internal
+    ? [ i.code || '—', i.numeroParte || '', i.comentarioInterno || '', i.desc || '', String(i.qty), i.price ? fmt(i.price) : '—', fmt((i.qty || 0) * (i.price || 0)) ]
+    : [ i.code || '—', i.desc || '', String(i.qty), i.price ? fmt(i.price) : '—', fmt((i.qty || 0) * (i.price || 0)) ]);
   doc.autoTable({
     startY: y,
-    head: [['CÓDIGO', 'DESCRIPCIÓN', 'CANT.', 'P. UNITARIO', 'TOTAL']],
-    body: data.items.map(i => [
-      i.code || '—',
-      i.desc || '',
-      String(i.qty),
-      i.price ? fmt(i.price) : '—',
-      fmt((i.qty || 0) * (i.price || 0))
-    ]),
+    head: [headRow],
+    body: bodyRows,
     theme: 'plain',
     margin: { left: M, right: M },
     styles: {
@@ -2256,13 +2386,9 @@ async function generatePDF() {
       lineWidth: { bottom: 1, top: 1 },
       lineColor: C.gray200
     },
-    columnStyles: {
-      0: { cellWidth: 75, font: 'courier', fontSize: 8.5, textColor: C.gray700 },
-      1: { cellWidth: 'auto' },
-      2: { cellWidth: 40, halign: 'right' },
-      3: { cellWidth: 75, halign: 'right' },
-      4: { cellWidth: 90, halign: 'right', fontStyle: 'bold' }
-    },
+    columnStyles: internal
+      ? { 0:{cellWidth:56, font:'courier', fontSize:8, textColor:C.gray700}, 1:{cellWidth:52, fontSize:8, textColor:C.gray700}, 2:{cellWidth:92, fontSize:8, textColor:C.gray700}, 3:{cellWidth:'auto'}, 4:{cellWidth:30, halign:'right'}, 5:{cellWidth:62, halign:'right'}, 6:{cellWidth:72, halign:'right', fontStyle:'bold'} }
+      : { 0:{cellWidth:75, font:'courier', fontSize:8.5, textColor:C.gray700}, 1:{cellWidth:'auto'}, 2:{cellWidth:40, halign:'right'}, 3:{cellWidth:75, halign:'right'}, 4:{cellWidth:90, halign:'right', fontStyle:'bold'} },
     didParseCell: (data) => {
       if (data.section === 'head') {
         data.cell.styles.textColor = C.gray600;
@@ -2501,13 +2627,14 @@ async function generatePDF() {
   );
 
   // SAVE
-  const filename = `COT-${String(state.cotNumber)}_${(data.client.name || 'cliente').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30)}.pdf`;
+  const filename = `COT-${String(state.cotNumber)}${internal ? '_INTERNO' : ''}_${(data.client.name || 'cliente').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30)}.pdf`;
   doc.save(filename);
 
-  toast(`PDF generado: ${filename}`);
+  toast(internal ? `Copia interna generada: ${filename}` : `PDF generado: ${filename}`);
 
   // Aloja el PDF (URL estable) y adjunta el link en la nota del contacto en GHL.
-  try {
+  // Solo la versión de cliente se aloja/adjunta en Heat (la copia interna no).
+  if (!internal) try {
     const dataUri = doc.output('datauristring');
     if (state.cotNumber > 0 && dataUri) {
       authFetch('/api/pdf-upload', {
