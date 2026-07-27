@@ -417,6 +417,8 @@ body {
 .items-table .col-code { width: 110px; }
 .items-table .col-parte { width: 110px; }
 .items-table .col-comentario { width: 150px; }
+.items-hint { font-size: 11.5px; color: var(--gray-500); padding: 10px 4px 0; line-height: 1.4; }
+.items-hint strong { color: var(--gray-700); font-weight: 600; }
 .items-table .col-qty { width: 64px; }
 .items-table .col-price { text-align: right; padding-right: 12px; font-weight: 600; color: var(--eq-navy); }
 .items-table .col-cost { width: 110px; }
@@ -1209,6 +1211,7 @@ body {
             </tbody>
           </table>
         </div>
+        <div class="items-hint">🔒 <strong>N° de parte</strong> y <strong>Comentario interno</strong> son de uso interno: no aparecen en el PDF ni en la cotización que recibe el cliente.</div>
       </div>
     </section>
 
@@ -1702,8 +1705,8 @@ function renderItems() {
     tr.dataset.id = it.id;
     tr.innerHTML = `
       <td class="col-code"><input class="code-input" data-field="code" value="${escapeAttr(it.code)}" placeholder="—" /></td>
-      <td class="col-parte"><input class="code-input" data-field="numeroParte" value="${escapeAttr(it.numeroParte)}" placeholder="interno" title="N° de parte (interno · no aparece en el PDF del cliente)" /></td>
-      <td class="col-comentario"><input class="code-input" data-field="comentarioInterno" value="${escapeAttr(it.comentarioInterno)}" placeholder="comentario" title="Comentario interno (interno · no aparece en el PDF del cliente)" /></td>
+      <td class="col-parte"><input class="code-input" data-field="numeroParte" value="${escapeAttr(it.numeroParte)}" placeholder="opcional" title="N° de parte (uso interno · no aparece en el PDF del cliente)" /></td>
+      <td class="col-comentario"><input class="code-input" data-field="comentarioInterno" value="${escapeAttr(it.comentarioInterno)}" placeholder="nota interna" title="Comentario interno (uso interno · no aparece en el PDF del cliente)" /></td>
       <td><textarea data-field="desc" rows="1" placeholder="Descripción del producto">${escapeHtml(it.desc)}</textarea></td>
       <td class="col-qty"><input class="right" data-field="qty" type="number" min="1" value="${it.qty || 1}" /></td>
       <td class="col-cost"><input class="right" data-field="cost" type="number" min="0" step="1" value="${it.cost || 0}" /></td>
