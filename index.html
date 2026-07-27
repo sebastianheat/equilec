@@ -389,6 +389,7 @@ body {
 .items-table textarea { resize: vertical; min-height: 36px; line-height: 1.45; }
 .items-table .col-code { width: 110px; }
 .items-table .col-parte { width: 110px; }
+.items-table .col-comentario { width: 150px; }
 .items-table .col-qty { width: 64px; }
 .items-table .col-price { text-align: right; padding-right: 12px; font-weight: 600; color: var(--eq-navy); }
 .items-table .col-cost { width: 110px; }
@@ -1165,6 +1166,7 @@ body {
               <tr>
                 <th class="col-code">Código (SKU)</th>
                 <th class="col-parte">N° parte</th>
+                <th class="col-comentario">Comentario interno</th>
                 <th>Descripción</th>
                 <th class="col-qty" style="text-align: right;">Cant.</th>
                 <th class="col-cost" style="text-align: right;">Costo unit.</th>
@@ -1641,11 +1643,12 @@ async function init() {
    ITEMS
    ========================================================================= */
 function addItem(prefill) {
-  const item = prefill || { id: uid(), code: '', numeroParte: '', desc: '', qty: 1, cost: 0, margen: DEFAULT_MARGEN };
+  const item = prefill || { id: uid(), code: '', numeroParte: '', comentarioInterno: '', desc: '', qty: 1, cost: 0, margen: DEFAULT_MARGEN };
   if (!prefill) item.id = uid();
   // Backwards compat / normalization
   if (item.cost == null) item.cost = 0;
   if (item.numeroParte == null) item.numeroParte = '';
+  if (item.comentarioInterno == null) item.comentarioInterno = '';
   if (item.margen == null || item.margen === '') item.margen = deriveMargen(item);
   // Sale price is always derived from cost + margin (no longer editable)
   item.price = calcPrice(item);
@@ -1662,7 +1665,7 @@ function renderItems() {
   const tbody = $('itemsBody');
   tbody.innerHTML = '';
   if (state.items.length === 0) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="9">Sin productos. Agrega desde el catálogo o crea una línea manual.</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="10">Sin productos. Agrega desde el catálogo o crea una línea manual.</td></tr>';
     recalcTotals();
     return;
   }
@@ -1672,6 +1675,7 @@ function renderItems() {
     tr.innerHTML = `
       <td class="col-code"><input class="code-input" data-field="code" value="${escapeAttr(it.code)}" placeholder="—" /></td>
       <td class="col-parte"><input class="code-input" data-field="numeroParte" value="${escapeAttr(it.numeroParte)}" placeholder="interno" title="N° de parte (interno · no aparece en el PDF del cliente)" /></td>
+      <td class="col-comentario"><input class="code-input" data-field="comentarioInterno" value="${escapeAttr(it.comentarioInterno)}" placeholder="comentario" title="Comentario interno (interno · no aparece en el PDF del cliente)" /></td>
       <td><textarea data-field="desc" rows="1" placeholder="Descripción del producto">${escapeHtml(it.desc)}</textarea></td>
       <td class="col-qty"><input class="right" data-field="qty" type="number" min="1" value="${it.qty || 1}" /></td>
       <td class="col-cost"><input class="right" data-field="cost" type="number" min="0" step="1" value="${it.cost || 0}" /></td>
@@ -1870,7 +1874,7 @@ function addFromCatalog(cod) {
   if (!p) return;
 
   // Catalog "precio" is taken as the cost base; sale price is auto from cost + default margin.
-  const mk = () => { const it = { code: p.cod, numeroParte: '', desc: p.desc, qty: 1, cost: p.precio || 0, margen: DEFAULT_MARGEN }; it.price = calcPrice(it); return it; };
+  const mk = () => { const it = { code: p.cod, numeroParte: '', comentarioInterno: '', desc: p.desc, qty: 1, cost: p.precio || 0, margen: DEFAULT_MARGEN }; it.price = calcPrice(it); return it; };
   // If the only item is an empty starter row, replace it
   if (state.items.length === 1 && !state.items[0].code && !state.items[0].desc && !state.items[0].cost) {
     state.items[0] = { id: state.items[0].id, ...mk() };
@@ -2014,6 +2018,7 @@ async function loadCotizacion(number) {
     state.items = (rec.items || []).map(i => {
       const it = { ...i, id: uid() };
       if (it.numeroParte == null) it.numeroParte = '';
+      if (it.comentarioInterno == null) it.comentarioInterno = '';
       if (it.margen == null || it.margen === '') it.margen = deriveMargen(it);
       it.price = calcPrice(it);
       return it;
@@ -2096,6 +2101,7 @@ function collectData() {
     items: state.items.filter(i => i.desc || i.code).map(i => ({
       code: i.code,
       numeroParte: i.numeroParte || '',
+      comentarioInterno: i.comentarioInterno || '',
       desc: i.desc,
       qty: i.qty || 0,
       cost: i.cost || 0,
