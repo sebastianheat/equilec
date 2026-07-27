@@ -88,7 +88,7 @@ export default withWeb(async (req) => {
   const ghl = await pushCotizacionToGHL({
     number, ot, isNew, tipoCliente, aribaId,
     ghlOppId: existing?.ghl_opp_id || null,
-    client: body.client, terms, totals, vendor, createdBy,
+    client: body.client, terms, totals, vendor, createdBy, items: body.items,
   });
   try {
     const status = ghl?.ok ? `ok:${ghl.oppMode || ""}` : `error:${(ghl && ghl.error) || "desconocido"}`;

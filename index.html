@@ -237,7 +237,12 @@ body {
 .type-toggle .type-btn:hover { background: var(--gray-50); }
 .type-toggle .type-btn.active { background: var(--eq-blue); color: #fff; }
 
-.topbar-actions { display: flex; gap: 8px; }
+.topbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pdf-internal { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--gray-600); cursor: pointer; user-select: none; white-space: nowrap; padding: 0 2px; }
+.pdf-internal input { accent-color: var(--eq-blue); cursor: pointer; width: 15px; height: 15px; }
+.pdf-internal.on { color: #B91C1C; font-weight: 600; }
+#pdfBtn.internal { background: #B91C1C; }
+#pdfBtn.internal:hover { background: #991B1B; }
 .btn {
   border: 0;
   border-radius: var(--radius);
@@ -1109,9 +1114,13 @@ body {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
           Guardar
         </button>
-        <button class="btn btn-primary" onclick="generatePDF()" title="Generar PDF">
+        <label class="pdf-internal" id="pdfInternalWrap" title="Incluye N° de parte y comentarios internos. NO enviar al cliente.">
+          <input type="checkbox" id="pdfInternal" onchange="updatePdfMode()" />
+          <span>Incluir comentarios internos</span>
+        </label>
+        <button class="btn btn-primary" id="pdfBtn" onclick="generatePDF()" title="PDF para el cliente">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-          Generar PDF
+          <span id="pdfBtnLabel">Generar PDF (cliente)</span>
         </button>
       </div>
     </div>
@@ -2201,10 +2210,22 @@ function collectData() {
 /* =========================================================================
    PDF GENERATION
    ========================================================================= */
+function updatePdfMode() {
+  const on = !!($('pdfInternal') && $('pdfInternal').checked);
+  const btn = $('pdfBtn'), lbl = $('pdfBtnLabel'), wrap = $('pdfInternalWrap');
+  if (lbl) lbl.textContent = on ? 'Generar PDF INTERNO' : 'Generar PDF (cliente)';
+  if (btn) { btn.classList.toggle('internal', on); btn.title = on ? 'COPIA INTERNA con comentarios — NO enviar al cliente' : 'PDF para el cliente'; }
+  if (wrap) wrap.classList.toggle('on', on);
+}
+
 async function generatePDF() {
   if (!validateRequired()) return;
   const data = collectData();
   if (data.items.length === 0) { toast('Agrega al menos un producto'); return; }
+
+  // ¿Copia interna (incluye N° de parte y comentarios internos)?
+  const internal = !!($('pdfInternal') && $('pdfInternal').checked);
+  if (internal && !confirm('COPIA INTERNA\n\nEste PDF incluye el N° de parte y los comentarios internos, y NO debe enviarse al cliente.\n\n¿Generar la copia interna?')) return;
 
   // Generar PDF marca la cotización como "Generado"
   state.status = 'generado';
@@ -2281,6 +2302,22 @@ async function generatePDF() {
   doc.setTextColor(...C.gray600);
   doc.text(fmtDate(new Date()), rightX, M + 64, { align: 'right' });
 
+  // Marca de "copia interna" (solo versión interna)
+  if (internal) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(185, 28, 28);
+    doc.text('COPIA INTERNA - NO ENVIAR AL CLIENTE', rightX, M + 78, { align: 'right' });
+    try {
+      doc.setGState(new doc.GState({ opacity: 0.08 }));
+      doc.setTextColor(185, 28, 28);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(72);
+      doc.text('USO INTERNO', W / 2, H / 2, { align: 'center', angle: 32 });
+      doc.setGState(new doc.GState({ opacity: 1 }));
+    } catch (e) {}
+  }
+
   // Company info under logo
   doc.setFontSize(8.5);
   doc.setTextColor(...C.gray700);
@@ -2319,17 +2356,17 @@ async function generatePDF() {
 
   y += 38;
 
-  // ITEMS TABLE
+  // ITEMS TABLE — la copia interna agrega N° de parte y comentario interno
+  const headRow = internal
+    ? ['CÓDIGO', 'N° PARTE', 'COMENT. INTERNO', 'DESCRIPCIÓN', 'CANT.', 'P. UNITARIO', 'TOTAL']
+    : ['CÓDIGO', 'DESCRIPCIÓN', 'CANT.', 'P. UNITARIO', 'TOTAL'];
+  const bodyRows = data.items.map(i => internal
+    ? [ i.code || '—', i.numeroParte || '', i.comentarioInterno || '', i.desc || '', String(i.qty), i.price ? fmt(i.price) : '—', fmt((i.qty || 0) * (i.price || 0)) ]
+    : [ i.code || '—', i.desc || '', String(i.qty), i.price ? fmt(i.price) : '—', fmt((i.qty || 0) * (i.price || 0)) ]);
   doc.autoTable({
     startY: y,
-    head: [['CÓDIGO', 'DESCRIPCIÓN', 'CANT.', 'P. UNITARIO', 'TOTAL']],
-    body: data.items.map(i => [
-      i.code || '—',
-      i.desc || '',
-      String(i.qty),
-      i.price ? fmt(i.price) : '—',
-      fmt((i.qty || 0) * (i.price || 0))
-    ]),
+    head: [headRow],
+    body: bodyRows,
     theme: 'plain',
     margin: { left: M, right: M },
     styles: {
@@ -2349,13 +2386,9 @@ async function generatePDF() {
       lineWidth: { bottom: 1, top: 1 },
       lineColor: C.gray200
     },
-    columnStyles: {
-      0: { cellWidth: 75, font: 'courier', fontSize: 8.5, textColor: C.gray700 },
-      1: { cellWidth: 'auto' },
-      2: { cellWidth: 40, halign: 'right' },
-      3: { cellWidth: 75, halign: 'right' },
-      4: { cellWidth: 90, halign: 'right', fontStyle: 'bold' }
-    },
+    columnStyles: internal
+      ? { 0:{cellWidth:56, font:'courier', fontSize:8, textColor:C.gray700}, 1:{cellWidth:52, fontSize:8, textColor:C.gray700}, 2:{cellWidth:92, fontSize:8, textColor:C.gray700}, 3:{cellWidth:'auto'}, 4:{cellWidth:30, halign:'right'}, 5:{cellWidth:62, halign:'right'}, 6:{cellWidth:72, halign:'right', fontStyle:'bold'} }
+      : { 0:{cellWidth:75, font:'courier', fontSize:8.5, textColor:C.gray700}, 1:{cellWidth:'auto'}, 2:{cellWidth:40, halign:'right'}, 3:{cellWidth:75, halign:'right'}, 4:{cellWidth:90, halign:'right', fontStyle:'bold'} },
     didParseCell: (data) => {
       if (data.section === 'head') {
         data.cell.styles.textColor = C.gray600;
@@ -2594,13 +2627,14 @@ async function generatePDF() {
   );
 
   // SAVE
-  const filename = `COT-${String(state.cotNumber)}_${(data.client.name || 'cliente').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30)}.pdf`;
+  const filename = `COT-${String(state.cotNumber)}${internal ? '_INTERNO' : ''}_${(data.client.name || 'cliente').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30)}.pdf`;
   doc.save(filename);
 
-  toast(`PDF generado: ${filename}`);
+  toast(internal ? `Copia interna generada: ${filename}` : `PDF generado: ${filename}`);
 
   // Aloja el PDF (URL estable) y adjunta el link en la nota del contacto en GHL.
-  try {
+  // Solo la versión de cliente se aloja/adjunta en Heat (la copia interna no).
+  if (!internal) try {
     const dataUri = doc.output('datauristring');
     if (state.cotNumber > 0 && dataUri) {
       authFetch('/api/pdf-upload', {
