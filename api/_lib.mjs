@@ -38,6 +38,8 @@ export function db() {
    ============================================================ */
 
 export async function readCounter() {
+  // Tarea 18: el folio parte desde 14.500 (piso). Idempotente — solo sube, nunca baja.
+  await db().sql`UPDATE counters SET next_val = GREATEST(next_val, 14500) WHERE name = 'folio'`;
   const rows = await db().sql`SELECT next_val FROM counters WHERE name = 'folio'`;
   if (!rows.length) return FOLIO_START;
   return Number(rows[0].next_val);
@@ -55,6 +57,8 @@ export async function writeCounter(next) {
  * Returns the number assigned to this caller.
  */
 export async function reserveNextNumber() {
+  // Tarea 18: piso de folio 14.500. Idempotente — solo sube, nunca baja.
+  await db().sql`UPDATE counters SET next_val = GREATEST(next_val, 14500) WHERE name = 'folio'`;
   const [row] = await db().sql`
     UPDATE counters
        SET next_val = next_val + 1
